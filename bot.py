@@ -154,15 +154,24 @@ async def process_wish_news_press(message: Message, state: FSMContext):
     formatted_data = format_monster_data(
         scrap_bestiary(url, min_armor_class, max_armor_class)
     )
-    for part in split_message(formatted_data):
-        await message.answer(text=part)
-        await asyncio.sleep(0.5)
-    await state.clear()
-    # Отправляем в чат сообщение о выходе из машины состояний
-    await message.answer(
-        text='Сержант Армор предлагает вам этих салаг!\n\n'
-             'Если хотите подобрать других, наберите /hire'
-    )
+    if not formatted_data:
+        await state.clear()
+        await message.answer(
+            text='В распоряжении сержанта Армора '
+                 'оказалиcь отвратительные кадры!\n'
+                 'Ни одна салага не подошла под ваш запрос.\n\n'
+                 'Если хотите подобрать других, наберите /hire'
+        )
+    else:
+        for output_part in split_message(formatted_data):
+            await message.answer(text=output_part)
+            await asyncio.sleep(0.5)
+        await state.clear()
+        # Отправляем в чат сообщение о выходе из машины состояний
+        await message.answer(
+            text='Сержант Армор предлагает вам этих салаг!\n\n'
+                 'Если хотите подобрать других, наберите /hire'
+        )
     # Отправляем в чат сообщение с предложением посмотреть свою анкету
 
 
@@ -182,7 +191,9 @@ async def warning_not_age(message: Message):
 @dp.message(StateFilter(default_state))
 async def send_echo(message: Message):
     await message.reply(text='Извините, сержант Армор не очень умён'
-                        ' и не понимает вас'
+                        ' и не понимает вас\n'
+                        'Чтобы снова перейти к отбору наёмников - '
+                        'отправьте команду /hire'
                         )
 
 

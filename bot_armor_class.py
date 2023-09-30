@@ -5,20 +5,16 @@ import requests
 from bs4 import BeautifulSoup
 
 
-def find_last_page_num(soup):
-    last_page = 1
+def is_last_page(soup):
     li_tags = soup.find('ul', class_='pagination').find_all('li')
     for tag in li_tags:
         text = tag.get_text()
         if '>' in text:
-            break
-        a_tag = tag.find('a')
-        if a_tag:
-            last_page = a_tag['title'].split()[1]
-    return last_page
+            return False
+    return True
 
 
-def scraping_cards(cards, min_armor_class, max_armor_class, monster_data):
+def scraping_cards(cards, min_armor_class, max_armor_class):
     base_url = "https://dnd.su"
     monster_data = []
     if max_armor_class < min_armor_class:
@@ -68,14 +64,13 @@ def scrap_bestiary(url: str, min_armor_class: int, max_armor_class: int):
     headers = {
         'User-Agent': ('Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
                        'AppleWebKit/537.36 (KHTML, like Gecko) '
-                       'Chrome/58.0.3029.110 Safari/537.36')
+                       'Chrome/91.0.4472.124 Safari/537.36')
     }
     r = requests.get(url, headers=headers)
-    initial_soup = BeautifulSoup(r.text, 'lxml')
     monster_data = []
-    last_page = int(find_last_page_num(initial_soup))
-
-    for page_num in range(1, last_page + 1):
+    page_num = 1
+    last_page = False
+    while not last_page:
         current_url = url + f'&page={page_num}'
         r = requests.get(current_url, headers=headers)
         soup = BeautifulSoup(r.text, 'lxml')
@@ -84,9 +79,10 @@ def scrap_bestiary(url: str, min_armor_class: int, max_armor_class: int):
             cards,
             min_armor_class,
             max_armor_class,
-            monster_data
             )
         )
         print('Прочитана страница N', page_num)
         time.sleep(2)
+        last_page = is_last_page(soup)
+        page_num += 1
     return monster_data
