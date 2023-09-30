@@ -1,11 +1,11 @@
+import asyncio
 import re
-import time
 
-import requests
+import aiohttp
 from bs4 import BeautifulSoup
 
 
-def is_last_page(soup):
+async def is_last_page(soup):
     li_tags = soup.find('ul', class_='pagination').find_all('li')
     for tag in li_tags:
         text = tag.get_text()
@@ -14,7 +14,7 @@ def is_last_page(soup):
     return True
 
 
-def scraping_cards(cards, min_armor_class, max_armor_class):
+async def scraping_cards(cards, min_armor_class, max_armor_class):
     base_url = "https://dnd.su"
     monster_data = []
     if max_armor_class < min_armor_class:
@@ -60,29 +60,30 @@ def scraping_cards(cards, min_armor_class, max_armor_class):
     return monster_data
 
 
-def scrap_bestiary(url: str, min_armor_class: int, max_armor_class: int):
+async def scrap_bestiary(url: str, min_armor_class: int, max_armor_class: int):
     headers = {
         'User-Agent': ('Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
                        'AppleWebKit/537.36 (KHTML, like Gecko) '
                        'Chrome/91.0.4472.124 Safari/537.36')
     }
-    r = requests.get(url, headers=headers)
-    monster_data = []
-    page_num = 1
-    last_page = False
-    while not last_page:
-        current_url = url + f'&page={page_num}'
-        r = requests.get(current_url, headers=headers)
-        soup = BeautifulSoup(r.text, 'lxml')
-        cards = soup.find_all('div', class_='card')
-        monster_data.extend(scraping_cards(
-            cards,
-            min_armor_class,
-            max_armor_class,
+    async with aiohttp.ClientSession() as session:
+        monster_data = []
+        page_num = 1
+        last_page = False
+        while not last_page:
+            current_url = url + f'&page={page_num}'
+            r = await session.get(current_url, headers=headers)
+            text = await r.text()
+            soup = BeautifulSoup(text, 'lxml')
+            cards = soup.find_all('div', class_='card')
+            monster_data.extend(await scraping_cards(
+                cards,
+                min_armor_class,
+                max_armor_class,
+                )
             )
-        )
-        print('Прочитана страница N', page_num)
-        time.sleep(2)
-        last_page = is_last_page(soup)
-        page_num += 1
-    return monster_data
+            print('Прочитана страница N', page_num)
+            last_page = await is_last_page(soup)
+            page_num += 1
+            await asyncio.sleep(2)
+        return monster_data

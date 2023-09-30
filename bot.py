@@ -152,7 +152,7 @@ async def process_wish_news_press(message: Message, state: FSMContext):
     data = await state.get_data()
     url = data.get('url')
     formatted_data = format_monster_data(
-        scrap_bestiary(url, min_armor_class, max_armor_class)
+        await scrap_bestiary(url, min_armor_class, max_armor_class)
     )
     if not formatted_data:
         await state.clear()
