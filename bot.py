@@ -47,7 +47,7 @@ def format_monster_data(data):
 
 def split_message(text, max_length=MAX_MESSAGE_LENGTH):
     while len(text) > max_length:
-        split_position = text.rfind('\n', 0, max_length)
+        split_position = text.rfind('\n\n', 0, max_length)
         if split_position == -1:  # если не найден символ переноса строки
             split_position = max_length
         yield text[:split_position]
