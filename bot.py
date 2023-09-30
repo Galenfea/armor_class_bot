@@ -12,6 +12,8 @@ from aiogram.types import Message
 from dotenv import load_dotenv
 
 from bot_armor_class import scrap_bestiary
+from monster_card import MonsterCard
+
 
 load_dotenv()
 
@@ -33,16 +35,6 @@ pattern_armor_class = re.compile(r'^(\d+)(?:\s+(\d+))?$')
 min_armor_class = 0
 max_armor_class = 0
 monster_data = []
-
-
-def format_monster_data(data):
-    formatted = []
-    for monster in data:
-        monster_info = "\n".join(
-            [f"{key}: {value}" for key, value in monster.items()]
-        )
-        formatted.append(monster_info)
-    return "\n\n".join(formatted)
 
 
 def split_message(text, max_length=MAX_MESSAGE_LENGTH):
@@ -151,10 +143,12 @@ async def process_wish_news_press(message: Message, state: FSMContext):
                            if matches.group(2) else min_armor_class)
     data = await state.get_data()
     url = data.get('url')
-    formatted_data = format_monster_data(
-        await scrap_bestiary(url, min_armor_class, max_armor_class)
-    )
-    if not formatted_data:
+    monsters: list[MonsterCard] = await scrap_bestiary(url,
+                                                       min_armor_class,
+                                                       max_armor_class
+                                                       )
+    formatted_monsters = '\n\n'.join([str(monster) for monster in monsters])
+    if not formatted_monsters:
         await state.clear()
         await message.answer(
             text='В распоряжении сержанта Армора '
@@ -163,7 +157,7 @@ async def process_wish_news_press(message: Message, state: FSMContext):
                  'Если хотите подобрать других, наберите /hire'
         )
     else:
-        for output_part in split_message(formatted_data):
+        for output_part in split_message(formatted_monsters):
             await message.answer(text=output_part)
             await asyncio.sleep(0.5)
         await state.clear()

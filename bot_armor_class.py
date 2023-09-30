@@ -4,8 +4,10 @@ import re
 import aiohttp
 from bs4 import BeautifulSoup
 
+from monster_card import MonsterCard
 
-async def is_last_page(soup):
+
+async def is_last_page(soup: BeautifulSoup) -> bool:
     li_tags = soup.find('ul', class_='pagination').find_all('li')
     for tag in li_tags:
         text = tag.get_text()
@@ -14,7 +16,7 @@ async def is_last_page(soup):
     return True
 
 
-async def scraping_cards(cards, min_armor_class, max_armor_class):
+async def scraping_cards(cards, min_armor_class, max_armor_class) -> list:
     base_url = "https://dnd.su"
     monster_data = []
     if max_armor_class < min_armor_class:
@@ -50,13 +52,8 @@ async def scraping_cards(cards, min_armor_class, max_armor_class):
                         danger_rate = None
 
             if min_armor_class <= int(armor_class) <= max_armor_class:
-                monster_data.append(
-                    {'Название': title,
-                     'URL': link,
-                     'Класс Доспеха': armor_class,
-                     'Опасность': danger_rate
-                     }
-                )
+                monster = MonsterCard(title, link, armor_class, danger_rate)
+                monster_data.append(monster)
     return monster_data
 
 
@@ -67,7 +64,7 @@ async def scrap_bestiary(url: str, min_armor_class: int, max_armor_class: int):
                        'Chrome/91.0.4472.124 Safari/537.36')
     }
     async with aiohttp.ClientSession() as session:
-        monster_data = []
+        monsters_list = []
         page_num = 1
         last_page = False
         while not last_page:
@@ -76,7 +73,7 @@ async def scrap_bestiary(url: str, min_armor_class: int, max_armor_class: int):
             text = await r.text()
             soup = BeautifulSoup(text, 'lxml')
             cards = soup.find_all('div', class_='card')
-            monster_data.extend(await scraping_cards(
+            monsters_list.extend(await scraping_cards(
                 cards,
                 min_armor_class,
                 max_armor_class,
@@ -86,4 +83,5 @@ async def scrap_bestiary(url: str, min_armor_class: int, max_armor_class: int):
             last_page = await is_last_page(soup)
             page_num += 1
             await asyncio.sleep(2)
-        return monster_data
+        monsters_list.sort(key=MonsterCard.sort_by_danger)
+        return monsters_list
