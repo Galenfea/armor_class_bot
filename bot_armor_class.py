@@ -6,6 +6,13 @@ from bs4 import BeautifulSoup
 
 from monster_card import MonsterCard
 
+SLEEP_TIME = 2
+MAX_PAGES = 3000
+USER_AGENT = ('Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
+              'AppleWebKit/537.36 (KHTML, like Gecko) '
+              'Chrome/91.0.4472.124 Safari/537.36'
+              )
+
 
 async def is_last_page(soup: BeautifulSoup) -> bool:
     try:
@@ -61,19 +68,22 @@ async def scraping_cards(cards, min_armor_class, max_armor_class) -> list:
 
 
 async def scrap_bestiary(url: str, min_armor_class: int, max_armor_class: int):
-    headers = {
-        'User-Agent': ('Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
-                       'AppleWebKit/537.36 (KHTML, like Gecko) '
-                       'Chrome/91.0.4472.124 Safari/537.36')
-    }
-    async with aiohttp.ClientSession() as session:
+    headers = {'User-Agent': USER_AGENT}
+    async with aiohttp.ClientSession(headers=headers) as session:
         monsters_list = []
         page_num = 1
         last_page = False
-        while not last_page:
+        while not last_page and page_num <= MAX_PAGES:
             current_url = url + f'&page={page_num}'
-            r = await session.get(current_url, headers=headers)
-            text = await r.text()
+            try:
+                async with session.get(current_url) as r:
+                    text = await r.text()
+            except aiohttp.ClientError as e:
+                print(f"Ошибка при запросе {current_url}: {e}")
+                return []
+            except aiohttp.ClientResponseError as e:
+                print(f"Ошибка ответа сервера {current_url}: {e}")
+                return []
             soup = BeautifulSoup(text, 'lxml')
             cards = soup.find_all('div', class_='card')
             monsters_list.extend(await scraping_cards(
@@ -85,6 +95,6 @@ async def scrap_bestiary(url: str, min_armor_class: int, max_armor_class: int):
             print(' Прочитана страница N', page_num)
             last_page = await is_last_page(soup)
             page_num += 1
-            await asyncio.sleep(2)
+            await asyncio.sleep(SLEEP_TIME)
         monsters_list.sort(key=MonsterCard.sort_by_danger)
         return monsters_list
