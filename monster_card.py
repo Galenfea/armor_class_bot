@@ -13,6 +13,9 @@ class MonsterCard:
         self.danger_rate = self.__danger_to_float(danger_rate_str)
 
     def __danger_to_float(self, danger_str):
+        if danger_str == "—":
+            return 0.0
+
         if '/' in danger_str:
             numerator, denominator = danger_str.split('/')
             return float(numerator) / float(denominator)

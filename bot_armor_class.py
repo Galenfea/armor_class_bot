@@ -8,11 +8,14 @@ from monster_card import MonsterCard
 
 
 async def is_last_page(soup: BeautifulSoup) -> bool:
-    li_tags = soup.find('ul', class_='pagination').find_all('li')
-    for tag in li_tags:
-        text = tag.get_text()
-        if '>' in text:
-            return False
+    try:
+        li_tags = soup.find('ul', class_='pagination').find_all('li')
+        for tag in li_tags:
+            text = tag.get_text()
+            if '>' in text:
+                return False
+    except AttributeError:
+        return True
     return True
 
 
@@ -47,7 +50,7 @@ async def scraping_cards(cards, min_armor_class, max_armor_class) -> list:
                         armor_class = '-1'
                 if "Опасность" in text:
                     try:
-                        danger_rate = re.search(r'\d+/\d+|\d+', text).group()
+                        danger_rate = re.search(r'\d+/\d+|\d+|—', text).group()
                     except AttributeError:
                         danger_rate = None
 
@@ -79,7 +82,7 @@ async def scrap_bestiary(url: str, min_armor_class: int, max_armor_class: int):
                 max_armor_class,
                 )
             )
-            print('Прочитана страница N', page_num)
+            print(' Прочитана страница N', page_num)
             last_page = await is_last_page(soup)
             page_num += 1
             await asyncio.sleep(2)
