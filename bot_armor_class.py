@@ -27,7 +27,7 @@ async def is_last_page(soup: BeautifulSoup) -> bool:
 
 
 async def scraping_cards(cards, min_armor_class, max_armor_class) -> list:
-    base_url = "https://dnd.su"
+    base_url = 'https://dnd.su'
     monster_data = []
     if max_armor_class < min_armor_class:
         min_armor_class, max_armor_class = max_armor_class, min_armor_class
@@ -40,8 +40,8 @@ async def scraping_cards(cards, min_armor_class, max_armor_class) -> list:
             title = title_tag.get_text(strip=True)
             link = base_url + title_tag.find('a')['href']
         else:
-            title = "Нет заголовка"
-            link = "Нет ссылки"
+            title = 'Нет заголовка'
+            link = 'Нет ссылки'
 
         # Находим и извлекаем класс доспеха
         params = card.find('ul', class_='params')
@@ -50,13 +50,12 @@ async def scraping_cards(cards, min_armor_class, max_armor_class) -> list:
             li_tags = params.find_all('li')
             for tag in li_tags:
                 text = tag.get_text()
-                if "Класс Доспеха" in text:
+                if tag.strong and tag.strong.string == 'Класс Доспеха':
                     try:
                         armor_class = re.search(r'\d+', text).group()
                     except AttributeError:
                         armor_class = '-1'
-                match = re.search(r'<strong>Опасность</strong>', str(tag))
-                if match:
+                if tag.strong and tag.strong.string == 'Опасность':
                     try:
                         danger_rate = re.search(r'\d+/\d+|\d+|—', text).group()
                     except AttributeError:
