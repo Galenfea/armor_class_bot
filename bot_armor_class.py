@@ -39,6 +39,7 @@ async def scraping_cards(cards, min_armor_class, max_armor_class) -> list:
         if title_tag:
             title = title_tag.get_text(strip=True)
             link = base_url + title_tag.find('a')['href']
+            print(title)
         else:
             title = "Нет заголовка"
             link = "Нет ссылки"
@@ -55,7 +56,8 @@ async def scraping_cards(cards, min_armor_class, max_armor_class) -> list:
                         armor_class = re.search(r'\d+', text).group()
                     except AttributeError:
                         armor_class = '-1'
-                if "Опасность" in text:
+                match = re.search(r'<strong>Опасность</strong>', str(tag))
+                if match:
                     try:
                         danger_rate = re.search(r'\d+/\d+|\d+|—', text).group()
                     except AttributeError:

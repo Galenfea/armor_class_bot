@@ -8,11 +8,12 @@ from aiogram.filters import Command, CommandStart, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup, default_state
 from aiogram.fsm.storage.memory import MemoryStorage
-from aiogram.types import Message
+from aiogram.types import CallbackQuery, Message
 from dotenv import load_dotenv
 
 from bot_armor_class import scrap_bestiary
 from monster_card import MonsterCard
+from keyboards import get_sorting_keyboard
 
 
 load_dotenv()
@@ -20,6 +21,12 @@ load_dotenv()
 
 BOT_TOKEN = os.getenv('BOT_TOKEN')
 MAX_MESSAGE_LENGTH = 4000
+SORTING_KEYS = {
+    "sort_by_danger": MonsterCard.sort_by_danger,
+    "sort_by_ac": MonsterCard.sort_by_ac,
+    "sort_by_title": MonsterCard.sort_by_title
+}
+
 
 # Инициализируем хранилище (создаем экземпляр класса MemoryStorage)
 storage = MemoryStorage()
@@ -54,6 +61,8 @@ class FSMSearchAC(StatesGroup):
     # бот в разные моменты взаимодейтсвия с пользователем
     get_url = State()        # Состояние ожидания ввода ссылки
     get_armor_class = State()  # Состояние ожидания ввода класс брони
+    sort_results = State()
+    print_results = State()
 
 
 # Этот хэндлер будет срабатывать на команду /start вне состояний
@@ -104,8 +113,6 @@ async def process_hire_command(message: Message, state: FSMContext):
     await state.set_state(FSMSearchAC.get_url)
 
 
-# Этот хэндлер будет срабатывать, если введено корректное имя
-# и переводить в состояние ожидания ввода возраста
 @dp.message(StateFilter(FSMSearchAC.get_url),
             lambda x: F.text and pattern_url.match(x.text)
             )
@@ -147,10 +154,38 @@ async def process_wish_news_press(message: Message, state: FSMContext):
                                                        min_armor_class,
                                                        max_armor_class
                                                        )
+    await state.set_data({'monsters': monsters})
+    await state.set_state(FSMSearchAC.sort_results)
+    keyboard = get_sorting_keyboard()
+    await bot.send_message(message.chat.id, "Выберите способ сортировки:",
+                           reply_markup=keyboard
+                           )
+
+
+@dp.callback_query(StateFilter(FSMSearchAC.sort_results),
+                   F.data.in_(['sort_by_danger',
+                               'sort_by_ac',
+                               'sort_by_title'])
+                   )
+async def handling_sort_buttons_(callback: CallbackQuery, state: FSMContext):
+    await callback.answer()
+    data = await state.get_data()
+    sort_key = callback.data
+    chat_id = callback.message.chat.id
+    if sort_key not in SORTING_KEYS:
+        await bot.send_message(
+            chat_id=chat_id,
+            text=('Произошла ошибка при сортировке. '
+                  'Пожалуйста, попробуйте снова.')
+        )
+        return
+    monsters = data.get('monsters')
+    monsters.sort(key=SORTING_KEYS[sort_key])
     formatted_monsters = '\n\n'.join([str(monster) for monster in monsters])
     if not formatted_monsters:
         await state.clear()
-        await message.answer(
+        await bot.send_message(
+            chat_id=chat_id,
             text='В распоряжении сержанта Армора '
                  'оказалиcь отвратительные кадры!\n'
                  'Ни одна салага не подошла под ваш запрос.\n\n'
@@ -158,15 +193,18 @@ async def process_wish_news_press(message: Message, state: FSMContext):
         )
     else:
         for output_part in split_message(formatted_monsters):
-            await message.answer(text=output_part)
+            await bot.send_message(
+                chat_id=chat_id,
+                text=output_part
+            )
             await asyncio.sleep(0.5)
         await state.clear()
         # Отправляем в чат сообщение о выходе из машины состояний
-        await message.answer(
+        await bot.send_message(
+            chat_id=chat_id,
             text='Сержант Армор предлагает вам этих салаг!\n\n'
                  'Если хотите подобрать других, наберите /hire'
         )
-    # Отправляем в чат сообщение с предложением посмотреть свою анкету
 
 
 # Этот хэндлер будет срабатывать, если во время ввода класс брони
