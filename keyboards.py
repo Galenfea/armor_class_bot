@@ -4,7 +4,7 @@ from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 def get_sorting_keyboard() -> InlineKeyboardMarkup:
     # Создаем объекты инлайн-кнопок
     button_danger = InlineKeyboardButton(
-        text='По рейтингу опасности',
+        text='По опасности',
         callback_data='sort_by_danger'
     )
 
@@ -21,9 +21,7 @@ def get_sorting_keyboard() -> InlineKeyboardMarkup:
     # Создаем объект инлайн-клавиатуры
     keyboard = InlineKeyboardMarkup(
         inline_keyboard=[
-            [button_danger],
-            [button_ac],
-            [button_title]
+            [button_danger, button_ac, button_title]
         ]
     )
 

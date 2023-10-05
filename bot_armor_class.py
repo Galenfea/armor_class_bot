@@ -39,7 +39,6 @@ async def scraping_cards(cards, min_armor_class, max_armor_class) -> list:
         if title_tag:
             title = title_tag.get_text(strip=True)
             link = base_url + title_tag.find('a')['href']
-            print(title)
         else:
             title = "Нет заголовка"
             link = "Нет ссылки"
