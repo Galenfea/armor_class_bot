@@ -9,7 +9,7 @@ class MonsterCard:
     def __init__(self, title, link, armor_class, danger_rate_str):
         self.title = title
         self.link = link
-        self.armor_class = armor_class
+        self.armor_class = int(armor_class)
         self.danger_rate = self.__danger_to_float(danger_rate_str)
 
     def __danger_to_float(self, danger_str):

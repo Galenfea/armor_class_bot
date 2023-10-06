@@ -41,8 +41,7 @@ async def get_selection_keyboard(filter_name: str) -> InlineKeyboardMarkup:
     ]
     inline_keyboard = [row for row in inline_keyboard if row]
 
-    keyboard = InlineKeyboardMarkup(inline_keyboard=inline_keyboard)
-    return keyboard
+    return InlineKeyboardMarkup(inline_keyboard=inline_keyboard)
 
 
 def get_sorting_keyboard() -> InlineKeyboardMarkup:
