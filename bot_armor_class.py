@@ -94,6 +94,8 @@ async def scrap_bestiary(url: str, min_armor_class: int, max_armor_class: int):
             )
             print(' Прочитана страница N', page_num)
             last_page = await is_last_page(soup)
+            if last_page:
+                print(' Чтение страниц завершено, спасибо за ожидание.\n')
             page_num += 1
             await asyncio.sleep(SLEEP_TIME)
         monsters_list.sort(key=MonsterCard.sort_by_danger)

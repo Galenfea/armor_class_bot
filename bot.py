@@ -13,8 +13,8 @@ from dotenv import load_dotenv
 
 from bot_armor_class import scrap_bestiary
 from monster_card import MonsterCard
-from keyboards import get_sorting_keyboard
-
+from keyboards import get_sorting_keyboard, get_url_keyboard
+from keyboards import get_selection_keyboard
 
 load_dotenv()
 
@@ -59,22 +59,68 @@ class FSMSearchAC(StatesGroup):
     # Создаем экземпляры класса State, последовательно
     # перечисляя возможные состояния, в которых будет находиться
     # бот в разные моменты взаимодейтсвия с пользователем
+    make_url_or_past = State()
     get_url = State()        # Состояние ожидания ввода ссылки
     get_armor_class = State()  # Состояние ожидания ввода класс брони
     sort_results = State()
     print_results = State()
+    size_selection = State()
+    type_selection = State()
+    alignment_selection = State()
+    danger_selection = State()
+    source_selection = State()
+    environment_selection = State()
+    speed_selection = State()
+    languages_selection = State()
 
 
 # Этот хэндлер будет срабатывать на команду /start вне состояний
 # и предлагать перейти к заполнению анкеты, отправив команду /fillform
 @dp.message(CommandStart(), StateFilter(default_state))
-async def process_start_command(message: Message):
+async def process_start_command(message: Message, state: FSMContext):
+    keyboard = get_url_keyboard()
     await message.answer(
         text='Это сержант Армор, он подберёт для вас наёмников'
              ' по классу брони\n'
              'Выбор производится из отобранных вами монстров\n'
-             'Чтобы начать отбор наберите команду /hire\n'
+             'Выберите монстров или вставьте ссылку на отобранных:\n',
+             reply_markup=keyboard
     )
+    await state.set_state(FSMSearchAC.make_url_or_past)
+
+
+@dp.callback_query(StateFilter(FSMSearchAC.make_url_or_past),
+                   F.data.in_(['url_paste',
+                               'url_form'])
+                   )
+async def handling_url_buttons_(callback: CallbackQuery, state: FSMContext):
+    await callback.answer(f'Вы выбрали {callback.data}')
+    chat_id = callback.message.chat.id
+    if callback.data == 'url_paste':
+        await bot.send_message(
+            chat_id=chat_id,
+            text='Вставьте ссылку типа '
+                 'https://dnd.su/bestiary/?search=[параметры]\n'
+                 'чтобы сержант Армор проверил ребят из тех, '
+                 'кого вы предварителньо отобрали')
+        await state.set_state(FSMSearchAC.get_url)
+    if callback.data == 'url_form':
+        keyboard = await get_selection_keyboard('size')
+        await bot.send_message(
+            chat_id=chat_id,
+            text='Выберите размер монстра:',
+            reply_markup=keyboard)
+        await state.set_state(FSMSearchAC.size_selection)
+
+
+@dp.callback_query(StateFilter(FSMSearchAC.size_selection), F.data)
+async def process_size_sent(callback: CallbackQuery, state: FSMContext):
+    await bot.send_message(callback.message.chat.id,
+                           text='Эта фича ещё в разработке.\n'
+                           'В следующий раз выбирайте ссылку.\n\n'
+                           'Чтобы начать наберить /start'
+                           )
+    await state.clear()
 
 
 # Этот хэндлер будет срабатывать на команду "/cancel" в состоянии
@@ -84,7 +130,7 @@ async def process_cancel_command(message: Message):
     await message.answer(
         text='Отменять нечего. Вы не начали отбор\n\n'
              'Чтобы перейти к отбору наёмников - '
-             'отправьте команду /hire'
+             'отправьте команду /start'
     )
 
 
@@ -95,22 +141,20 @@ async def process_cancel_command_state(message: Message, state: FSMContext):
     await message.answer(
         text='Вы прекратили отбор\n\n'
              'Чтобы снова перейти к отбору наёмников - '
-             'отправьте команду /hire'
+             'отправьте команду /start'
     )
     # Сбрасываем состояние и очищаем данные, полученные внутри состояний
     await state.clear()
 
 
 # Этот хэндлер будет срабатывать на команду /hire
-# и переводить бота в состояние ожидания ввода имени
-@dp.message(Command(commands='hire'), StateFilter(default_state))
-async def process_hire_command(message: Message, state: FSMContext):
-    await message.answer(text='Вставьте ссылку типа '
-                              'https://dnd.su/bestiary/?search=[параметры]\n'
-                              'чтобы сержант Армор проверил ребят из тех, '
-                              'кого вы предварителньо отобрали')
-    # Устанавливаем состояние ожидания ввода имени
-    await state.set_state(FSMSearchAC.get_url)
+# @dp.message(Command(commands='hire'), StateFilter(default_state))
+# async def process_hire_command(message: Message, state: FSMContext):
+#     await message.answer(text='Вставьте ссылку типа '
+#                               'https://dnd.su/bestiary/?search=[параметры]\n'
+#                               'чтобы сержант Армор проверил ребят из тех, '
+#                               'кого вы предварителньо отобрали')
+#     await state.set_state(FSMSearchAC.get_url)
 
 
 @dp.message(StateFilter(FSMSearchAC.get_url),
@@ -189,7 +233,7 @@ async def handling_sort_buttons_(callback: CallbackQuery, state: FSMContext):
             text='В распоряжении сержанта Армора '
                  'оказалиcь отвратительные кадры!\n'
                  'Ни одна салага не подошла под ваш запрос.\n\n'
-                 'Если хотите подобрать других, наберите /hire'
+                 'Если хотите подобрать других, наберите /start'
         )
     else:
         for output_part in split_message(formatted_monsters):
@@ -203,7 +247,7 @@ async def handling_sort_buttons_(callback: CallbackQuery, state: FSMContext):
         await bot.send_message(
             chat_id=chat_id,
             text='Сержант Армор предлагает вам этих салаг!\n\n'
-                 'Если хотите подобрать других, наберите /hire'
+                 'Если хотите подобрать других, наберите /start'
         )
 
 
@@ -225,7 +269,7 @@ async def send_echo(message: Message):
     await message.reply(text='Извините, сержант Армор не очень умён'
                         ' и не понимает вас\n'
                         'Чтобы снова перейти к отбору наёмников - '
-                        'отправьте команду /hire'
+                        'отправьте команду /start'
                         )
 
 
@@ -240,7 +284,7 @@ async def main():
           '\n Название телеграм бота: Monster Armor Class\n'
           '\n Имя бота для поиска: @monster_armor_class_bot\n'
           '\n Для остановки бота закройте программу\n'
-          ' или нажмите ctrl+c и подождите 20 секунд.\n'
+          ' или нажмите ctrl+c.\n'
           )
     await dp.start_polling(bot)
 
@@ -248,17 +292,5 @@ async def main():
 if __name__ == '__main__':
     try:
         asyncio.run(main())
-        print(
-            '\n ДЕМО-версия телеграм бота.\n'
-            ' Для полноценного и стабильного релиза\n'
-            ' требуется платный интернет хостинг.\n'
-            ' Демоверсия использует в качестве хостинга ваш компьютер.\n'
-            '\n ВНИМАНИЕ: не закрывайте программу, пока не закончите работу.\n'
-            ' Бот не работает без запущенной программы.\n'
-            '\n Название телеграм бота: Monster Armor Class\n'
-            '\n Имя бота для поиска: @monster_armor_class_bot\n'
-            '\n Для остановки бота закройте программу\n'
-            ' или нажмите ctrl+c и подождите 20 секунд.\n'
-            )
     except KeyboardInterrupt:
-        print('Exit')
+        print('До свидания!')
