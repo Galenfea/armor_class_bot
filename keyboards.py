@@ -3,9 +3,7 @@ from itertools import islice
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from selector import SELECTOR
 
-BUTTON_FACTOR = {
-    'size': 3
-}
+BUTTON_FACTOR = (3, 20)
 
 
 def get_url_keyboard() -> InlineKeyboardMarkup:
@@ -27,6 +25,7 @@ def get_url_keyboard() -> InlineKeyboardMarkup:
 
 
 async def get_selection_keyboard(filter_name: str) -> InlineKeyboardMarkup:
+    print('Название клавиатуры', filter_name)
     buttons = SELECTOR.get(filter_name)
     if buttons is None:
         return InlineKeyboardMarkup(inline_keyboard=[])
@@ -34,12 +33,18 @@ async def get_selection_keyboard(filter_name: str) -> InlineKeyboardMarkup:
     inline_keyboard = [
          [InlineKeyboardButton(
              text=text,
-             callback_data=f'{filter_name}:{value}'
+             callback_data=f'{filter_name}={value}'
           )
-          for text, value in islice(button_iter, BUTTON_FACTOR[filter_name])]
-         for _ in range(10)
+          for text, value in islice(button_iter, BUTTON_FACTOR[0])]
+         for _ in range(BUTTON_FACTOR[1])
     ]
     inline_keyboard = [row for row in inline_keyboard if row]
+    inline_keyboard.append(
+        [InlineKeyboardButton(
+            text='Пропустить',
+            callback_data=f'{filter_name}=_'
+        )]
+    )
 
     return InlineKeyboardMarkup(inline_keyboard=inline_keyboard)
 

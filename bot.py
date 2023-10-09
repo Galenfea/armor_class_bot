@@ -1,12 +1,13 @@
 import asyncio
 import os
 import re
+from functools import partial
 from typing import Match, Optional
 
 from aiogram import Bot, Dispatcher, F
 from aiogram.filters import Command, CommandStart, StateFilter
 from aiogram.fsm.context import FSMContext
-from aiogram.fsm.state import State, StatesGroup, default_state
+from aiogram.fsm.state import State, default_state
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import CallbackQuery, Message
 from dotenv import load_dotenv
@@ -15,17 +16,26 @@ from bot_armor_class import scrap_bestiary
 from monster_card import MonsterCard
 from keyboards import get_sorting_keyboard, get_url_keyboard
 from keyboards import get_selection_keyboard
+from selector import PHRASES_AND_STATES, FSMSearchAC
 
 load_dotenv()
 
-
 BOT_TOKEN = os.getenv('BOT_TOKEN')
+
+
 MAX_MESSAGE_LENGTH = 4000
 SORTING_KEYS = {
     "sort_by_danger": MonsterCard.sort_by_danger,
     "sort_by_ac": MonsterCard.sort_by_ac,
     "sort_by_title": MonsterCard.sort_by_title
 }
+
+BASE_FORMED_URL = 'https://dnd.su/bestiary/?search='
+INVITE_ENTER_ARMOR_CLASS_TEXT = (
+    'Отлично!\n\nА теперь введите класс брони.\n'
+    'Вы можете ввести диапазон, для этого введите '
+    'две цифры через пробел'
+)
 
 
 # Инициализируем хранилище (создаем экземпляр класса MemoryStorage)
@@ -54,28 +64,17 @@ def split_message(text, max_length=MAX_MESSAGE_LENGTH):
     yield text
 
 
-# Cоздаем класс, наследуемый от StatesGroup, для группы состояний нашей FSM
-class FSMSearchAC(StatesGroup):
-    # Создаем экземпляры класса State, последовательно
-    # перечисляя возможные состояния, в которых будет находиться
-    # бот в разные моменты взаимодейтсвия с пользователем
-    make_url_or_past = State()
-    get_url = State()        # Состояние ожидания ввода ссылки
-    get_armor_class = State()  # Состояние ожидания ввода класс брони
-    sort_results = State()
-    print_results = State()
-    size_selection = State()
-    type_selection = State()
-    alignment_selection = State()
-    danger_selection = State()
-    source_selection = State()
-    environment_selection = State()
-    speed_selection = State()
-    languages_selection = State()
+async def form_final_url(state: FSMContext, base_url: str) -> str:
+    data = await state.get_data()
+    additional_params = [
+        value for key, value in data.items() if key.startswith('url_')
+    ]
+    formed_url = f'{base_url}&{"&".join(additional_params)}'
+    return formed_url
 
 
 # Этот хэндлер будет срабатывать на команду /start вне состояний
-# и предлагать перейти к заполнению анкеты, отправив команду /fillform
+# и предлагать перейти выбору монстров
 @dp.message(CommandStart(), StateFilter(default_state))
 async def process_start_command(message: Message, state: FSMContext):
     keyboard = get_url_keyboard()
@@ -87,6 +86,53 @@ async def process_start_command(message: Message, state: FSMContext):
              reply_markup=keyboard
     )
     await state.set_state(FSMSearchAC.make_url_or_past)
+
+
+async def generic_process_handler(
+        callback: CallbackQuery,
+        state: FSMContext,
+        keyword: str,
+        new_state: State,
+        text: str,
+        keyboard: str
+        ):
+    '''Универсальный обработчик для разных состояний.
+    Формирует ссылку на список монстров исходя из предпочтений пользователя.
+    '''
+    print('Ключевое слово', keyword)
+    print(getattr(callback, 'data', None))
+    if callback.data != f'{keyword}=_':
+        await state.update_data({f'url_{keyword}': callback.data})
+    current_state = await state.get_state()
+    print(f'Текущее состояние: {current_state}')
+    await state.set_state(state=new_state)
+    current_state = await state.get_state()
+    print(f'Новое состояние: {current_state}')
+    await bot.send_message(
+        chat_id=callback.message.chat.id,
+        text=text,
+        reply_markup=await get_selection_keyboard(keyboard)
+    )
+
+
+async def dynamic_handlers_registration():
+    for keyword, value in PHRASES_AND_STATES.items():
+        print(f'\nРегистрация обработчика:\n'
+              f'Ключ: {keyword}\nЗначение: {value}'
+              )
+        handler = partial(
+            generic_process_handler,
+            keyword=keyword,
+            new_state=value.state,
+            text=value.phrase,
+            keyboard=value.keyboard
+        )
+        print(f'Созданный обработчик: {handler}\n')
+        dp.callback_query.register(
+            handler,
+            StateFilter(getattr(FSMSearchAC, f'{keyword}_selection')),
+            F.data.startswith(f'{keyword}=')
+        )
 
 
 @dp.callback_query(StateFilter(FSMSearchAC.make_url_or_past),
@@ -110,17 +156,30 @@ async def handling_url_buttons_(callback: CallbackQuery, state: FSMContext):
             chat_id=chat_id,
             text='Выберите размер монстра:',
             reply_markup=keyboard)
+        print('CALLBACK DATA = ', callback.data)
+        current_state = await state.get_state()
+        print(f'Текущее состояние: {current_state}')
         await state.set_state(FSMSearchAC.size_selection)
+        current_state = await state.get_state()
+        print(f'Новое состояние: {current_state}')
 
 
-@dp.callback_query(StateFilter(FSMSearchAC.size_selection), F.data)
-async def process_size_sent(callback: CallbackQuery, state: FSMContext):
-    await bot.send_message(callback.message.chat.id,
-                           text='Эта фича ещё в разработке.\n'
-                           'В следующий раз выбирайте ссылку.\n\n'
-                           'Чтобы начать наберить /start'
-                           )
-    await state.clear()
+# @dp.callback_query(
+#         StateFilter(FSMSearchAC.size_selection),
+#         F.data.startswith('size=')
+# )
+# async def process_size_sent(callback: CallbackQuery, state: FSMContext):
+#     print(callback.data)
+#     await state.update_data({'formed_url_size': callback.data})
+#     # data = await state.get_data()
+#     # formed_url: str = BASE_FORMED_URL + '&' + data.get('formed_url_size')
+#     # print('Сформированная ссылка = ', formed_url)
+#     # await state.update_data({'formed_url': formed_url})
+#     await state.set_state(PHRASES_AND_STATES['size'].state)
+#     await bot.send_message(
+#             chat_id=callback.message.chat.id,
+#             text=PHRASES_AND_STATES['size'].phrase
+#     )
 
 
 # Этот хэндлер будет срабатывать на команду "/cancel" в состоянии
@@ -147,25 +206,12 @@ async def process_cancel_command_state(message: Message, state: FSMContext):
     await state.clear()
 
 
-# Этот хэндлер будет срабатывать на команду /hire
-# @dp.message(Command(commands='hire'), StateFilter(default_state))
-# async def process_hire_command(message: Message, state: FSMContext):
-#     await message.answer(text='Вставьте ссылку типа '
-#                               'https://dnd.su/bestiary/?search=[параметры]\n'
-#                               'чтобы сержант Армор проверил ребят из тех, '
-#                               'кого вы предварителньо отобрали')
-#     await state.set_state(FSMSearchAC.get_url)
-
-
 @dp.message(StateFilter(FSMSearchAC.get_url),
             lambda x: F.text and pattern_url.match(x.text)
             )
 async def process_name_sent(message: Message, state: FSMContext):
-    # Cохраняем введенную ссылку в хранилище по ключу "name"
     await state.update_data(url=message.text)
-    await message.answer(text='Отлично!\n\nА теперь введите класс брони.\n'
-                         'Вы можете ввести диапазон, для этого введите '
-                         'две цифры через пробел')
+    await message.answer(text=INVITE_ENTER_ARMOR_CLASS_TEXT)
     # Устанавливаем состояние ожидания ввода класса брони
     await state.set_state(FSMSearchAC.get_armor_class)
 
@@ -193,7 +239,9 @@ async def process_wish_news_press(message: Message, state: FSMContext):
         max_armor_class = (int(matches.group(2))
                            if matches.group(2) else min_armor_class)
     data = await state.get_data()
-    url = data.get('url')
+    formed_url = await form_final_url(state, BASE_FORMED_URL)
+    url = data.get('url') or formed_url
+    print('Какая ссылка получена в итоге = ', url)
     monsters: list[MonsterCard] = await scrap_bestiary(url,
                                                        min_armor_class,
                                                        max_armor_class
@@ -274,6 +322,7 @@ async def send_echo(message: Message):
 
 
 async def main():
+    await dynamic_handlers_registration()
     print(
           '\n ДЕМО-версия телеграм бота.\n'
           ' Для полноценного и стабильного релиза\n'
