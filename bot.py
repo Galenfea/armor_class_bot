@@ -12,11 +12,29 @@ from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import CallbackQuery, Message
 from dotenv import load_dotenv
 
-from bot_armor_class import scrap_bestiary
+from keyboards import (
+    get_selection_keyboard,
+    get_sorting_keyboard,
+    get_url_keyboard
+)
+from messages import (
+    ARMOR_CLASS_ERROR,
+    CANCEL,
+    CHOICE_SORT_METHOD,
+    EMPTY_LIST,
+    FALSE_CANCEL,
+    FINAL_WORD,
+    INPUT_ERROR,
+    INSERT_LINK,
+    INVITE_ENTER_ARMOR_CLASS_TEXT,
+    MONSTER_INPUT_INVITATION,
+    PHRASE_SIZE,
+    SORT_ERROR,
+    WRONG_LINK
+)
 from monster_card import MonsterCard
-from keyboards import get_sorting_keyboard, get_url_keyboard
-from keyboards import get_selection_keyboard
-from selector import PHRASES_AND_STATES, FSMSearchAC
+from scraper import scrap_bestiary
+from states import PHRASES_AND_STATES, FSMSearchAC
 
 load_dotenv()
 
@@ -25,18 +43,12 @@ BOT_TOKEN = os.getenv('BOT_TOKEN')
 
 MAX_MESSAGE_LENGTH = 4000
 SORTING_KEYS = {
-    "sort_by_danger": MonsterCard.sort_by_danger,
-    "sort_by_ac": MonsterCard.sort_by_ac,
-    "sort_by_title": MonsterCard.sort_by_title
+    'sort_by_danger': MonsterCard.sort_by_danger,
+    'sort_by_ac': MonsterCard.sort_by_ac,
+    'sort_by_title': MonsterCard.sort_by_title
 }
 
 BASE_FORMED_URL = 'https://dnd.su/bestiary/?search='
-INVITE_ENTER_ARMOR_CLASS_TEXT = (
-    'Отлично!\n\nА теперь введите класс брони.\n'
-    'Вы можете ввести диапазон, для этого введите '
-    'две цифры через пробел'
-)
-
 
 # Инициализируем хранилище (создаем экземпляр класса MemoryStorage)
 storage = MemoryStorage()
@@ -73,22 +85,17 @@ async def form_final_url(state: FSMContext, base_url: str) -> str:
     return formed_url
 
 
-# Этот хэндлер будет срабатывать на команду /start вне состояний
-# и предлагать перейти выбору монстров
 @dp.message(CommandStart(), StateFilter(default_state))
-async def process_start_command(message: Message, state: FSMContext):
+async def handle_start_command(message: Message, state: FSMContext):
     keyboard = get_url_keyboard()
     await message.answer(
-        text='Это сержант Армор, он подберёт для вас наёмников'
-             ' по классу брони\n'
-             'Выбор производится из отобранных вами монстров\n'
-             'Выберите монстров или вставьте ссылку на отобранных:\n',
-             reply_markup=keyboard
+        text=MONSTER_INPUT_INVITATION,
+        reply_markup=keyboard
     )
     await state.set_state(FSMSearchAC.make_url_or_past)
 
 
-async def generic_process_handler(
+async def generate_handlers(
         callback: CallbackQuery,
         state: FSMContext,
         keyword: str,
@@ -101,6 +108,7 @@ async def generic_process_handler(
     '''
     print('Ключевое слово', keyword)
     print(getattr(callback, 'data', None))
+    await callback.answer()
     if callback.data != f'{keyword}=_':
         await state.update_data({f'url_{keyword}': callback.data})
     current_state = await state.get_state()
@@ -121,7 +129,7 @@ async def dynamic_handlers_registration():
               f'Ключ: {keyword}\nЗначение: {value}'
               )
         handler = partial(
-            generic_process_handler,
+            generate_handlers,
             keyword=keyword,
             new_state=value.state,
             text=value.phrase,
@@ -139,22 +147,20 @@ async def dynamic_handlers_registration():
                    F.data.in_(['url_paste',
                                'url_form'])
                    )
-async def handling_url_buttons_(callback: CallbackQuery, state: FSMContext):
-    await callback.answer(f'Вы выбрали {callback.data}')
+async def handle_url_buttons(callback: CallbackQuery, state: FSMContext):
+    await callback.answer()
     chat_id = callback.message.chat.id
     if callback.data == 'url_paste':
         await bot.send_message(
             chat_id=chat_id,
-            text='Вставьте ссылку типа '
-                 'https://dnd.su/bestiary/?search=[параметры]\n'
-                 'чтобы сержант Армор проверил ребят из тех, '
-                 'кого вы предварителньо отобрали')
+            text=INSERT_LINK
+        )
         await state.set_state(FSMSearchAC.get_url)
     if callback.data == 'url_form':
         keyboard = await get_selection_keyboard('size')
         await bot.send_message(
             chat_id=chat_id,
-            text='Выберите размер монстра:',
+            text=PHRASE_SIZE,
             reply_markup=keyboard)
         print('CALLBACK DATA = ', callback.data)
         current_state = await state.get_state()
@@ -164,75 +170,41 @@ async def handling_url_buttons_(callback: CallbackQuery, state: FSMContext):
         print(f'Новое состояние: {current_state}')
 
 
-# @dp.callback_query(
-#         StateFilter(FSMSearchAC.size_selection),
-#         F.data.startswith('size=')
-# )
-# async def process_size_sent(callback: CallbackQuery, state: FSMContext):
-#     print(callback.data)
-#     await state.update_data({'formed_url_size': callback.data})
-#     # data = await state.get_data()
-#     # formed_url: str = BASE_FORMED_URL + '&' + data.get('formed_url_size')
-#     # print('Сформированная ссылка = ', formed_url)
-#     # await state.update_data({'formed_url': formed_url})
-#     await state.set_state(PHRASES_AND_STATES['size'].state)
-#     await bot.send_message(
-#             chat_id=callback.message.chat.id,
-#             text=PHRASES_AND_STATES['size'].phrase
-#     )
-
-
-# Этот хэндлер будет срабатывать на команду "/cancel" в состоянии
-# по умолчанию
 @dp.message(Command(commands='cancel'), StateFilter(default_state))
-async def process_cancel_command(message: Message):
+async def handle_cancel_in_default_state(message: Message):
     await message.answer(
-        text='Отменять нечего. Вы не начали отбор\n\n'
-             'Чтобы перейти к отбору наёмников - '
-             'отправьте команду /start'
+        text=FALSE_CANCEL
     )
 
 
-# Этот хэндлер будет срабатывать на команду "/cancel" в любых состояниях,
-# кроме состояния по умолчанию, и отключать машину состояний
 @dp.message(Command(commands='cancel'), ~StateFilter(default_state))
-async def process_cancel_command_state(message: Message, state: FSMContext):
+async def handle_cancel_in_state(message: Message, state: FSMContext):
     await message.answer(
-        text='Вы прекратили отбор\n\n'
-             'Чтобы снова перейти к отбору наёмников - '
-             'отправьте команду /start'
+        text=CANCEL
     )
-    # Сбрасываем состояние и очищаем данные, полученные внутри состояний
     await state.clear()
 
 
 @dp.message(StateFilter(FSMSearchAC.get_url),
             lambda x: F.text and pattern_url.match(x.text)
             )
-async def process_name_sent(message: Message, state: FSMContext):
+async def handle_url(message: Message, state: FSMContext):
     await state.update_data(url=message.text)
     await message.answer(text=INVITE_ENTER_ARMOR_CLASS_TEXT)
-    # Устанавливаем состояние ожидания ввода класса брони
     await state.set_state(FSMSearchAC.get_armor_class)
 
 
-# Этот хэндлер будет срабатывать, если во время ввода ссылки
-# будет введено что-то некорректное
 @dp.message(StateFilter(FSMSearchAC.get_url))
 async def warning_not_url(message: Message):
     await message.answer(
-        text='То, что вы отправили не похоже на нужную ссылку\n\n'
-             'Пожалуйста, введите ссылку вида'
-             ' https://dnd.su/bestiary/?search=&size=1&type=2\n\n'
-             'Если вы хотите прервать подбор наёмников - '
-             'отправьте команду /cancel'
+        text=WRONG_LINK
     )
 
 
 @dp.message(StateFilter(FSMSearchAC.get_armor_class),
             lambda x: F.text and pattern_armor_class.match(x.text)
             )
-async def process_wish_news_press(message: Message, state: FSMContext):
+async def handle_armor_class(message: Message, state: FSMContext):
     matches: Optional[Match] = pattern_armor_class.match(message.text)
     if matches:
         min_armor_class = int(matches.group(1))
@@ -241,15 +213,22 @@ async def process_wish_news_press(message: Message, state: FSMContext):
     data = await state.get_data()
     formed_url = await form_final_url(state, BASE_FORMED_URL)
     url = data.get('url') or formed_url
-    print('Какая ссылка получена в итоге = ', url)
+    print('Ссылка', url)
     monsters: list[MonsterCard] = await scrap_bestiary(url,
                                                        min_armor_class,
                                                        max_armor_class
                                                        )
+    if not monsters:
+        await state.clear()
+        await bot.send_message(
+            chat_id=message.chat.id,
+            text=EMPTY_LIST
+        )
+        return None
     await state.set_data({'monsters': monsters})
     await state.set_state(FSMSearchAC.sort_results)
     keyboard = get_sorting_keyboard()
-    await bot.send_message(message.chat.id, "Выберите способ сортировки:",
+    await bot.send_message(message.chat.id, CHOICE_SORT_METHOD,
                            reply_markup=keyboard
                            )
 
@@ -259,7 +238,7 @@ async def process_wish_news_press(message: Message, state: FSMContext):
                                'sort_by_ac',
                                'sort_by_title'])
                    )
-async def handling_sort_buttons_(callback: CallbackQuery, state: FSMContext):
+async def handle_sort_buttons_(callback: CallbackQuery, state: FSMContext):
     await callback.answer()
     data = await state.get_data()
     sort_key = callback.data
@@ -267,58 +246,35 @@ async def handling_sort_buttons_(callback: CallbackQuery, state: FSMContext):
     if sort_key not in SORTING_KEYS:
         await bot.send_message(
             chat_id=chat_id,
-            text=('Произошла ошибка при сортировке. '
-                  'Пожалуйста, попробуйте снова.')
+            text=(SORT_ERROR)
         )
         return
     monsters = data.get('monsters')
     monsters.sort(key=SORTING_KEYS[sort_key])
     formatted_monsters = '\n\n'.join([str(monster) for monster in monsters])
-    if not formatted_monsters:
-        await state.clear()
+    for output_part in split_message(formatted_monsters):
         await bot.send_message(
             chat_id=chat_id,
-            text='В распоряжении сержанта Армора '
-                 'оказалиcь отвратительные кадры!\n'
-                 'Ни одна салага не подошла под ваш запрос.\n\n'
-                 'Если хотите подобрать других, наберите /start'
+            text=output_part
         )
-    else:
-        for output_part in split_message(formatted_monsters):
-            await bot.send_message(
-                chat_id=chat_id,
-                text=output_part
-            )
-            await asyncio.sleep(0.5)
-        await state.clear()
-        # Отправляем в чат сообщение о выходе из машины состояний
-        await bot.send_message(
-            chat_id=chat_id,
-            text='Сержант Армор предлагает вам этих салаг!\n\n'
-                 'Если хотите подобрать других, наберите /start'
-        )
-
-
-# Этот хэндлер будет срабатывать, если во время ввода класс брони
-# будет введено что-то некорректное
-@dp.message(StateFilter(FSMSearchAC.get_armor_class))
-async def warning_not_age(message: Message):
-    await message.answer(
-        text='Вы некорректно ввели класс брони\n\n'
-             'Попробуйте еще раз\n\nЕсли вы хотите прервать '
-             'заполнение анкеты - отправьте команду /cancel'
+        await asyncio.sleep(0.5)
+    await state.clear()
+    await bot.send_message(
+        chat_id=chat_id,
+        text=FINAL_WORD
     )
 
 
-# Этот хэндлер будет срабатывать на любые сообщения, кроме тех
-# для которых есть отдельные хэндлеры, вне состояний
+@dp.message(StateFilter(FSMSearchAC.get_armor_class))
+async def warning_not_age(message: Message):
+    await message.answer(
+        text=ARMOR_CLASS_ERROR
+    )
+
+
 @dp.message(StateFilter(default_state))
-async def send_echo(message: Message):
-    await message.reply(text='Извините, сержант Армор не очень умён'
-                        ' и не понимает вас\n'
-                        'Чтобы снова перейти к отбору наёмников - '
-                        'отправьте команду /start'
-                        )
+async def handle_input_in_default_state(message: Message):
+    await message.reply(text=INPUT_ERROR)
 
 
 async def main():

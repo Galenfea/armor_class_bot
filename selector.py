@@ -1,87 +1,6 @@
-from collections import namedtuple
-
-from aiogram.fsm.state import State, StatesGroup
-
-
-# Cоздаем класс, наследуемый от StatesGroup, для группы состояний нашей FSM
-class FSMSearchAC(StatesGroup):
-    # Создаем экземпляры класса State, последовательно
-    # перечисляя возможные состояния, в которых будет находиться
-    # бот в разные моменты взаимодейтсвия с пользователем
-    make_url_or_past = State()
-    get_url = State()        # Состояние ожидания ввода ссылки
-    get_armor_class = State()  # Состояние ожидания ввода класс брони
-    sort_results = State()
-    print_results = State()
-    size_selection = State()
-    type_selection = State()
-    alignment_selection = State()
-    danger_selection = State()
-    # source_selection = State()
-    environment_selection = State()
-    speed_selection = State()
-    languages_selection = State()
-
-
-PHRASE_TYPE = 'Выберите тип монстра'
-PHRASE_ALIGNMENT = 'Выберите мировоозрение монстра'
-PHRASE_DANGER = 'Выберите рейтинг опасности монстра'
-# PHRASE_SOURCE = 'Выберите книгу, в которой будете искать монстра'
-PHRASE_ENVIRONMENT = 'Выберите среду, в которой живёт монстр'
-PHRASE_SPEED = 'Выберите скорость монстра'
-PHRASE_LANGUAGES = 'Выберите язык монстра'
-INVITE_ENTER_ARMOR_CLASS_TEXT = (
-    'Отлично!\n\nА теперь введите класс брони.\n'
-    'Вы можете ввести диапазон, для этого введите '
-    'две цифры через пробел'
-)
-
-
-Phrase_and_state = namedtuple(
-    'Phrase_and_state',
-    ['phrase', 'state', 'keyboard']
-    )
-
-PHRASES_AND_STATES = {
-    'size': Phrase_and_state(
-        phrase=PHRASE_TYPE,
-        state=FSMSearchAC.type_selection,
-        keyboard='type'
-    ),
-    'type': Phrase_and_state(
-        phrase=PHRASE_ALIGNMENT,
-        state=FSMSearchAC.alignment_selection,
-        keyboard='alignment'
-    ),
-    'alignment': Phrase_and_state(
-        phrase=PHRASE_DANGER,
-        state=FSMSearchAC.danger_selection,
-        keyboard='danger'
-    ),
-    'danger': Phrase_and_state(
-        phrase=PHRASE_ENVIRONMENT,
-        state=FSMSearchAC.environment_selection,
-        keyboard='environment'
-    ),
-    #     'source': Phrase_and_state(
-    #         phrase=PHRASE_ENVIRONMENT,
-    #         state=FSMSearchAC.environment_selection,
-    #         keyboard='environment'
-    #     ),
-    'environment': Phrase_and_state(
-        phrase=PHRASE_SPEED,
-        state=FSMSearchAC.speed_selection,
-        keyboard='speed'
-    ),
-    'speed': Phrase_and_state(
-        phrase=INVITE_ENTER_ARMOR_CLASS_TEXT,
-        state=FSMSearchAC.get_armor_class,
-        keyboard=None
-    )
-}
-
-# https://dnd.su/bestiary/?search=&size=10
-# https://dnd.su/bestiary/?search=&size=1%7C2%7C3%7C4
+'''The file contains the names of options for
+filtering monsters and codes for selection buttons.
+'''
 
 DELIMITER = '%7C'
 
@@ -99,7 +18,6 @@ SIZE = {
     'Большой рой средних': '9'
 }
 
-# https://dnd.su/bestiary/?search=&type=24
 TYPE = {
     'Аберрация': '24',
     'Великан': '25',
@@ -334,8 +252,6 @@ SELECTOR = {
     'type': TYPE,
     'alignment': ALIGNMENT,
     'danger': DANGER,
-    # 'source': SOURCE,
     'environment': ENVIRONMENT,
     'speed': SPEED,
-    # 'languages': LANGUAGES
 }

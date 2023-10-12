@@ -1,6 +1,7 @@
 from itertools import islice
 
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+
 from selector import SELECTOR
 
 BUTTON_FACTOR = (3, 20)

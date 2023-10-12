@@ -1,5 +1,6 @@
 import asyncio
 import re
+from typing import List
 
 import aiohttp
 from bs4 import BeautifulSoup
@@ -15,6 +16,16 @@ USER_AGENT = ('Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
 
 
 async def is_last_page(soup: BeautifulSoup) -> bool:
+    '''
+    Checks if the given BeautifulSoup object represents the last page of a web
+    scraping operation.
+
+    Args:
+        soup (BeautifulSoup): BeautifulSoup object of the web page.
+
+    Returns:
+        bool: True if it's the last page, False otherwise.
+    '''
     try:
         li_tags = soup.find('ul', class_='pagination').find_all('li')
         for tag in li_tags:
@@ -26,7 +37,22 @@ async def is_last_page(soup: BeautifulSoup) -> bool:
     return True
 
 
-async def scraping_cards(cards, min_armor_class, max_armor_class) -> list:
+async def scraping_cards(
+        cards: List[BeautifulSoup],
+        min_armor_class: int,
+        max_armor_class: int
+        ) -> List[MonsterCard]:
+    '''
+    Scrapes monster cards based on specified armor class criteria.
+
+    Args:
+        cards: List of BeautifulSoup objects representing monster cards.
+        min_armor_class (int): Minimum armor class.
+        max_armor_class (int): Maximum armor class.
+
+    Returns:
+        list: List of MonsterCard objects that meet the armor class criteria.
+    '''
     base_url = 'https://dnd.su'
     monster_data = []
     if max_armor_class < min_armor_class:
@@ -34,18 +60,22 @@ async def scraping_cards(cards, min_armor_class, max_armor_class) -> list:
     for card in cards:
         # Находим и извлекаем название монстра и ссылку
         title_tag = card.find('h2', class_='card-title')
+
         # В этой части мы добавим проверку на то, что title не None,
         # прежде чем пытаться извлечь текст и href
         if title_tag:
             title = title_tag.get_text(strip=True)
-            link = base_url + title_tag.find('a')['href']
+            try:
+                link = base_url + title_tag.find('a')['href']
+            except TypeError:
+                link = 'Нет ссылки'
         else:
             title = 'Нет заголовка'
             link = 'Нет ссылки'
 
         # Находим и извлекаем класс доспеха
         params = card.find('ul', class_='params')
-
+        danger_rate = None
         if params:
             li_tags = params.find_all('li')
             for tag in li_tags:
@@ -68,6 +98,17 @@ async def scraping_cards(cards, min_armor_class, max_armor_class) -> list:
 
 
 async def scrap_bestiary(url: str, min_armor_class: int, max_armor_class: int):
+    '''
+    Scrap the D&D bestiary based on armor class criteria.
+
+    Args:
+        url (str): The URL of the D&D bestiary.
+        min_armor_class (int): Minimum armor class.
+        max_armor_class (int): Maximum armor class.
+
+    Returns:
+        list: List of MonsterCard objects.
+    '''
     headers = {'User-Agent': USER_AGENT}
     async with aiohttp.ClientSession(headers=headers) as session:
         monsters_list = []
@@ -98,5 +139,4 @@ async def scrap_bestiary(url: str, min_armor_class: int, max_armor_class: int):
                 print(' Чтение страниц завершено, спасибо за ожидание.\n')
             page_num += 1
             await asyncio.sleep(SLEEP_TIME)
-        monsters_list.sort(key=MonsterCard.sort_by_danger)
         return monsters_list
