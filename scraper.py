@@ -7,22 +7,10 @@ from typing import List, Optional, Tuple, Union
 import aiohttp
 from bs4 import BeautifulSoup, Tag
 
+from constantns import SCRAPER_SETTINGS
 from exceptions import EmptyDataError
 from log_config import log_config
 from monster_card import MonsterCard
-
-SLEEP_TIME = 2
-MAX_PAGES = 1000
-USER_AGENT = ('Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
-              'AppleWebKit/537.36 (KHTML, like Gecko) '
-              'Chrome/91.0.4472.124 Safari/537.36'
-              )
-BASE_URL = 'https://dnd.su'
-ARMOR_CLASS = 'Класс Доспеха'
-DANGER = 'Опасность'
-ARMOR_PATTERN = r'\d+'
-DANGER_PATTERN = r'\d+/\d+|\d+|—'
-NEXT_PAGE_INDICATOR = '>'
 
 dictConfig(log_config)
 logger = logging.getLogger(__name__)
@@ -73,7 +61,7 @@ def is_last_page(soup: BeautifulSoup) -> bool:
         raise EmptyDataError('There is no li tags in pagination')
     for tag in li_tags:
         text = tag.get_text()
-        if NEXT_PAGE_INDICATOR in text:
+        if SCRAPER_SETTINGS['NEXT_PAGE_INDICATOR'] in text:
             return False
     return True
 
@@ -176,14 +164,14 @@ def get_armor_class_and_danger(
         armor_class = read_characteristic(
             tag,
             text,
-            ARMOR_CLASS,
-            ARMOR_PATTERN
+            SCRAPER_SETTINGS['ARMOR_CLASS'],
+            SCRAPER_SETTINGS['ARMOR_PATTERN']
         )
         danger_rate = read_characteristic(
             tag,
             text,
-            DANGER,
-            DANGER_PATTERN
+            SCRAPER_SETTINGS['DANGER'],
+            SCRAPER_SETTINGS['DANGER_PATTERN']
         )
     logger.debug(f'armor class = {armor_class}, danger = {danger_rate}')
     return armor_class, danger_rate
@@ -320,12 +308,12 @@ async def scrape_bestiary(
     Returns:
         list: List of MonsterCard objects.
     """
-    headers = {'User-Agent': USER_AGENT}
+    headers = {'User-Agent': SCRAPER_SETTINGS['USER_AGENT']}
     async with aiohttp.ClientSession(headers=headers) as session:
         monsters_list: List[MonsterCard] = []
         page_num = 1
         last_page = False
-        while not last_page and page_num <= MAX_PAGES:
+        while not last_page and page_num <= SCRAPER_SETTINGS['MAX_PAGES']:
             current_url = url + f'&page={page_num}'
             try:
                 soup = await get_soup(session=session, current_url=current_url)
@@ -346,5 +334,5 @@ async def scrape_bestiary(
             if last_page:
                 logger.debug(' Reading pages completed.\n')
             page_num += 1
-            await asyncio.sleep(SLEEP_TIME)
+            await asyncio.sleep(SCRAPER_SETTINGS['SLEEP_TIME'])
         return monsters_list

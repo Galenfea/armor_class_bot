@@ -1,6 +1,7 @@
-'''The module contains a set of states, messages corresponding to them,
+"""
+The module contains a set of states, messages corresponding to them,
 and the order of transition from one state to another.
-'''
+"""
 
 from collections import namedtuple
 
@@ -17,12 +18,9 @@ from messages import (
 
 
 class FSMSearchAC(StatesGroup):
-    # Создаем экземпляры класса State, последовательно
-    # перечисляя возможные состояния, в которых будет находиться
-    # бот в разные моменты взаимодейтсвия с пользователем
     make_url_or_past = State()
-    get_url = State()        # Состояние ожидания ввода ссылки
-    get_armor_class = State()  # Состояние ожидания ввода класс брони
+    get_url = State()
+    get_armor_class = State()
     sort_results = State()
     print_results = State()
     size_selection = State()

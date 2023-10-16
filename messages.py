@@ -1,8 +1,9 @@
 
-'''The module contains all the texts of messages
+"""
+The module contains all the texts of messages
 sent to the user, which are used both in the
 main module and in the "states" module.
-'''
+"""
 
 PHRASE_SIZE = 'Выберите размер монстра'
 PHRASE_TYPE = 'Выберите тип монстра'
@@ -71,4 +72,8 @@ INPUT_ERROR = (
         ' и не понимает вас\n'
         'Чтобы снова перейти к отбору наёмников - '
         'отправьте команду /start'
+)
+SOME_ERROR = (
+    'Что-то пошло не так. Работа прервана.\n'
+    'Сержант уже должился командованию (администратору бота).'
 )

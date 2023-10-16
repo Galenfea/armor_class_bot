@@ -1,8 +1,7 @@
-'''The file contains the names of options for
+"""
+The file contains the names of options for
 filtering monsters and codes for selection buttons.
-'''
-
-DELIMITER = '%7C'
+"""
 
 SIZE = {
     'Крошечный': '1',
@@ -35,10 +34,8 @@ TYPE = {
     'Элементаль': '30',
     'Транспорт': '33',
     'Объект': '34'
-
 }
 
-# https://dnd.su/bestiary/?search=&alignment=lg
 ALIGNMENT = {
     'Законно-добрый': 'lg',
     'Нейтрально-добрый': 'ng',
@@ -51,7 +48,6 @@ ALIGNMENT = {
     'Хаотично-злой': 'ce',
     'Без мировоззрения': 'none'
 }
-
 
 DANGER = {
     "0": "10",
@@ -89,7 +85,6 @@ DANGER = {
     "29": "42",
     "30": "43"
 }
-
 
 SOURCE = {
     "Dungeon master's guide": "101",
@@ -145,7 +140,6 @@ SOURCE = {
     "The Vecna Dossier": "174",
     "Adventurers League": "169"
 }
-
 
 ENVIRONMENT = {
     'Арктика': '1',

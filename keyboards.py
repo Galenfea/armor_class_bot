@@ -1,21 +1,39 @@
 from itertools import islice
+import logging
+from logging.config import dictConfig
 
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
+from constantns import BUTTON_FACTOR, BUTTON_TEXT, CALLBACK_DATA
+from log_config import log_config
 from selector import SELECTOR
 
-BUTTON_FACTOR = (3, 20)
+dictConfig(log_config)
+logger = logging.getLogger('armor_class_bot')
 
 
-def get_url_keyboard() -> InlineKeyboardMarkup:
+def get_url_keyboard(language: str) -> InlineKeyboardMarkup:
+    """
+    Generate and return an inline keyboard for URL options.
+
+    Args:
+        language (str): Language code to determine the text on buttons.
+
+    Returns:
+        InlineKeyboardMarkup: A keyboard with buttons for URL options.
+    """
     button_url_paste = InlineKeyboardButton(
-        text='Вставить ссылку',
-        callback_data='url_paste'
+        text=BUTTON_TEXT.get(
+            language, BUTTON_TEXT['en']
+            ).get('URL_PASTE', 'Unknown button'),
+        callback_data=CALLBACK_DATA['URL_PASTE']
     )
 
     button_url_form = InlineKeyboardButton(
-        text='Выбрать монстров',
-        callback_data='url_form'
+        text=BUTTON_TEXT.get(
+            language, BUTTON_TEXT['en']
+            ).get('URL_FORM', 'Unknown button'),
+        callback_data=CALLBACK_DATA['URL_FORM']
     )
     keyboard = InlineKeyboardMarkup(
         inline_keyboard=[
@@ -25,9 +43,25 @@ def get_url_keyboard() -> InlineKeyboardMarkup:
     return keyboard
 
 
-async def get_selection_keyboard(filter_name: str) -> InlineKeyboardMarkup:
-    print('Название клавиатуры', filter_name)
+def get_selection_keyboard(
+        filter_name: str,
+        language: str
+        ) -> InlineKeyboardMarkup:
+    """
+    Generate and return an inline keyboard based on the given filter name.
+
+    Parameters:
+        filter_name (str): The name of the filter for which to generate
+        the keyboard.
+        language (str): Language code to determine the text on buttons.
+
+    Returns:
+        InlineKeyboardMarkup: A keyboard with buttons related to the filter.
+    """
+    logger.debug(f'Keyboard name {filter_name}')
+    logger.debug(f'Language used: {language}')
     buttons = SELECTOR.get(filter_name)
+    logger.debug(f'Buttons for {filter_name}: {buttons}')
     if buttons is None:
         return InlineKeyboardMarkup(inline_keyboard=[])
     button_iter = iter(buttons.items())
@@ -36,13 +70,13 @@ async def get_selection_keyboard(filter_name: str) -> InlineKeyboardMarkup:
              text=text,
              callback_data=f'{filter_name}={value}'
           )
-          for text, value in islice(button_iter, BUTTON_FACTOR[0])]
-         for _ in range(BUTTON_FACTOR[1])
+          for text, value in islice(button_iter, BUTTON_FACTOR['columns'])]
+         for _ in range(BUTTON_FACTOR['lines'])
     ]
     inline_keyboard = [row for row in inline_keyboard if row]
     inline_keyboard.append(
         [InlineKeyboardButton(
-            text='Пропустить',
+            text=BUTTON_TEXT[language]['SKIP'],
             callback_data=f'{filter_name}=_'
         )]
     )
@@ -50,24 +84,37 @@ async def get_selection_keyboard(filter_name: str) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=inline_keyboard)
 
 
-def get_sorting_keyboard() -> InlineKeyboardMarkup:
-    # Создаем объекты инлайн-кнопок
+def get_sorting_keyboard(language: str) -> InlineKeyboardMarkup:
+    """
+    Generate and return an inline keyboard for sorting options.
+
+    Parameters:
+        language (str): Language code to determine the text on buttons.
+
+    Returns:
+        InlineKeyboardMarkup: A keyboard with sorting options.
+    """
     button_danger = InlineKeyboardButton(
-        text='По опасности',
-        callback_data='sort_by_danger'
+        text=BUTTON_TEXT.get(
+            language, BUTTON_TEXT['en']
+            ).get('SORT_BY_DANGER', 'Unknown button'),
+        callback_data=CALLBACK_DATA['SORT_BY_DANGER']
     )
 
     button_ac = InlineKeyboardButton(
-        text='По классу доспеха',
-        callback_data='sort_by_ac'
+        text=BUTTON_TEXT.get(
+            language, BUTTON_TEXT['en']
+            ).get('SORT_BY_AC', 'Unknown button'),
+        callback_data=CALLBACK_DATA['SORT_BY_AC']
     )
 
     button_title = InlineKeyboardButton(
-        text='По названию',
-        callback_data='sort_by_title'
+        text=BUTTON_TEXT.get(
+            language, BUTTON_TEXT['en']
+            ).get('SORT_BY_TITLE', 'Unknown button'),
+        callback_data=CALLBACK_DATA['SORT_BY_TITLE']
     )
 
-    # Создаем объект инлайн-клавиатуры
     keyboard = InlineKeyboardMarkup(
         inline_keyboard=[
             [button_danger, button_ac, button_title]
