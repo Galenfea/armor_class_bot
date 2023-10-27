@@ -1,301 +1,470 @@
 import asyncio
-import os
+import logging
 import re
 from functools import partial
-from typing import Match, Optional
+from logging.config import dictConfig
+from typing import List, Match, Optional
 
-from aiogram import Bot, Dispatcher, F
-from aiogram.filters import Command, CommandStart, StateFilter
+from aiogram import Dispatcher, F, Router
+from aiogram.exceptions import TelegramAPIError
+from aiogram.filters import CommandStart, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, default_state
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import CallbackQuery, Message
-from dotenv import load_dotenv
 
+from constantns import BUTTON_TEXT, LANGUAGES
+from exception_routes import exception_router
+from exceptions import EmptyDataError, EnvError
 from keyboards import (
+    get_language_keyboard,
     get_selection_keyboard,
     get_sorting_keyboard,
-    get_url_keyboard
+    get_url_keyboard,
 )
-from messages import (
-    ARMOR_CLASS_ERROR,
-    CANCEL,
-    CHOICE_SORT_METHOD,
-    EMPTY_LIST,
-    FALSE_CANCEL,
-    FINAL_WORD,
-    INPUT_ERROR,
-    INSERT_LINK,
-    INVITE_ENTER_ARMOR_CLASS_TEXT,
-    MONSTER_INPUT_INVITATION,
-    PHRASE_SIZE,
-    SORT_ERROR,
-    WRONG_LINK
-)
+from log_config import log_config
+from messages import MESSAGE_TEXT_ERROR, MESSAGES
 from monster_card import MonsterCard
-from scraper import scrap_bestiary
+from scraper import scrape_bestiary
+from singleton_bot import SingletonBot
 from states import PHRASES_AND_STATES, FSMSearchAC
+from utils import (
+    bag_report,
+    form_final_url,
+    get_current_language,
+    logstate,
+    safe_answer_callback,
+    safe_send_message,
+    split_message,
+)
 
-load_dotenv()
+dictConfig(log_config)
+logger = logging.getLogger("armor_class_bot")
 
-BOT_TOKEN = os.getenv('BOT_TOKEN')
 
-
-MAX_MESSAGE_LENGTH = 4000
 SORTING_KEYS = {
-    'sort_by_danger': MonsterCard.sort_by_danger,
-    'sort_by_ac': MonsterCard.sort_by_ac,
-    'sort_by_title': MonsterCard.sort_by_title
+    "sort_by_danger": MonsterCard.sort_by_danger,
+    "sort_by_ac": MonsterCard.sort_by_ac,
+    "sort_by_title": MonsterCard.sort_by_title,
 }
 
-BASE_FORMED_URL = 'https://dnd.su/bestiary/?search='
+BASE_FORMED_URL = "https://dnd.su/bestiary/?search="
 
-# Инициализируем хранилище (создаем экземпляр класса MemoryStorage)
 storage = MemoryStorage()
-
-# Создаем объекты бота и диспетчера
-bot = Bot(BOT_TOKEN)
+bot = SingletonBot()
 dp = Dispatcher(storage=storage)
-url = ''
+router = Router()
+
 pattern_url = re.compile(
-    r'^https://dnd\.su/bestiary/\?search=(&[\w\-]+=[\w\-]+)*$'
+    r"^https://dnd\.su/bestiary/\?search=(&[\w\-]+=[\w\-]+)*$"
 )
-pattern_armor_class = re.compile(r'^(\d+)(?:\s+(\d+))?$')
+pattern_armor_class = r"^(\d+)(?:\s+(\d+))?$"
 min_armor_class = 0
 max_armor_class = 0
-monster_data = []
+monster_data: Optional[List[MonsterCard]] = []
 
 
-def split_message(text, max_length=MAX_MESSAGE_LENGTH):
-    while len(text) > max_length:
-        split_position = text.rfind('\n\n', 0, max_length)
-        if split_position == -1:  # если не найден символ переноса строки
-            split_position = max_length
-        yield text[:split_position]
-        text = text[split_position:].lstrip()
-    yield text
-
-
-async def form_final_url(state: FSMContext, base_url: str) -> str:
-    data = await state.get_data()
-    additional_params = [
-        value for key, value in data.items() if key.startswith('url_')
-    ]
-    formed_url = f'{base_url}&{"&".join(additional_params)}'
-    return formed_url
-
-
-@dp.message(CommandStart(), StateFilter(default_state))
+@router.message(CommandStart(), StateFilter(default_state))
 async def handle_start_command(message: Message, state: FSMContext):
-    keyboard = get_url_keyboard()
-    await message.answer(
-        text=MONSTER_INPUT_INVITATION,
-        reply_markup=keyboard
+    keyboard = get_language_keyboard()
+    chat_id = message.chat.id
+    logger.debug(f"chat_id = {chat_id}, keyboard = {keyboard}")
+    current_state = await state.get_state()
+    logger.debug(f"State: {current_state}")
+    await safe_send_message(
+        chat_id=chat_id,
+        text=MESSAGES.get("CHOOSE_USER_LANGUAGE", MESSAGE_TEXT_ERROR),
+        state=state,
+        reply_markup=keyboard,
     )
+    await state.set_state(FSMSearchAC.choose_language)
+
+
+@router.callback_query(StateFilter(FSMSearchAC.choose_language))
+async def choose_language(callback: CallbackQuery, state: FSMContext) -> None:
+    await logstate(state, "State in choose_language")
+    await safe_answer_callback(callback)
+    await state.update_data({"current_language": callback.data})
+    try:
+        language: str = callback.data or LANGUAGES["EN"]
+        keyboard = get_url_keyboard(language)
+
+        chat_id = callback.message.chat.id  # type: ignore # In try block
+        logger.debug(f"chat_id = {chat_id}, keyboard = {keyboard}")
+        await safe_send_message(
+            chat_id=chat_id,
+            text=MESSAGES.get("MONSTER_INPUT_INVITATION", MESSAGE_TEXT_ERROR),
+            state=state,
+            reply_markup=keyboard,
+        )
+    except AttributeError as error:
+        logger.error(f"Probably message eror: {error}")
     await state.set_state(FSMSearchAC.make_url_or_past)
 
 
 async def generate_handlers(
-        callback: CallbackQuery,
-        state: FSMContext,
-        keyword: str,
-        new_state: State,
-        text: str,
-        keyboard: str
-        ):
-    '''Универсальный обработчик для разных состояний.
-    Формирует ссылку на список монстров исходя из предпочтений пользователя.
-    '''
-    print('Ключевое слово', keyword)
-    print(getattr(callback, 'data', None))
-    await callback.answer()
-    if callback.data != f'{keyword}=_':
-        await state.update_data({f'url_{keyword}': callback.data})
-    current_state = await state.get_state()
-    print(f'Текущее состояние: {current_state}')
-    await state.set_state(state=new_state)
-    current_state = await state.get_state()
-    print(f'Новое состояние: {current_state}')
-    await bot.send_message(
-        chat_id=callback.message.chat.id,
-        text=text,
-        reply_markup=await get_selection_keyboard(keyboard)
-    )
+    callback: CallbackQuery,
+    state: FSMContext,
+    keyword: str,
+    new_state: State,
+    text_key: str,
+    keyboard: str,
+) -> None:
+    """
+    Handle the incoming callback query, update the user's state in the
+    finite state machine, and send a message featuring a new keyboard layout.
 
+    Arguments:
+    :param callback: CallbackQuery - the callback query object from aiogram
+    :param state: FSMContext - the user's state context from aiogram
+    :param keyword: str - the keyword for processing and saving data
+    :param new_state: State - the new state the user should transition to
+    :param text: str - the text message to be sent to the user
+    :param keyboard: str - the name of the keyboard to be used for creating
+    the reply_markup
 
-async def dynamic_handlers_registration():
-    for keyword, value in PHRASES_AND_STATES.items():
-        print(f'\nРегистрация обработчика:\n'
-              f'Ключ: {keyword}\nЗначение: {value}'
-              )
-        handler = partial(
-            generate_handlers,
-            keyword=keyword,
-            new_state=value.state,
-            text=value.phrase,
-            keyboard=value.keyboard
+    Returns:
+    None
+    """
+    try:
+        curretnt_language = await get_current_language(state)
+
+        logger.debug(f"Keyword {keyword}")
+        logger.debug(getattr(callback, "data", None))
+
+        await safe_answer_callback(callback)
+        if callback.data != f"{keyword}=_":
+            await state.update_data({f"url_{keyword}": callback.data})
+        await logstate(state, "Current state in generate_handlers")
+
+        await state.set_state(state=new_state)
+        await logstate(state, "New state after set_state in generate_handlers")
+
+        await safe_send_message(
+            chat_id=callback.message.chat.id,  # type: ignore # In try block
+            text=MESSAGES.get(text_key, MESSAGE_TEXT_ERROR),
+            state=state,
+            reply_markup=get_selection_keyboard(keyboard, curretnt_language),
         )
-        print(f'Созданный обработчик: {handler}\n')
-        dp.callback_query.register(
-            handler,
-            StateFilter(getattr(FSMSearchAC, f'{keyword}_selection')),
-            F.data.startswith(f'{keyword}=')
-        )
+    except (AttributeError, ValueError) as error:
+        logger.error(f"Error while processing callback: {error}")
+    except (TimeoutError, ConnectionError) as error:
+        logger.critical(f"Network-related error: {error}")
 
 
-@dp.callback_query(StateFilter(FSMSearchAC.make_url_or_past),
-                   F.data.in_(['url_paste',
-                               'url_form'])
-                   )
-async def handle_url_buttons(callback: CallbackQuery, state: FSMContext):
-    await callback.answer()
-    chat_id = callback.message.chat.id
-    if callback.data == 'url_paste':
-        await bot.send_message(
-            chat_id=chat_id,
-            text=INSERT_LINK
-        )
-        await state.set_state(FSMSearchAC.get_url)
-    if callback.data == 'url_form':
-        keyboard = await get_selection_keyboard('size')
-        await bot.send_message(
-            chat_id=chat_id,
-            text=PHRASE_SIZE,
-            reply_markup=keyboard)
-        print('CALLBACK DATA = ', callback.data)
-        current_state = await state.get_state()
-        print(f'Текущее состояние: {current_state}')
-        await state.set_state(FSMSearchAC.size_selection)
-        current_state = await state.get_state()
-        print(f'Новое состояние: {current_state}')
+async def dynamic_handlers_registration() -> None:
+    """
+    Dynamically register handlers for different states and phrases based
+    on the contents of the PHRASES_AND_STATES dictionary.
 
+    Iterate through the PHRASES_AND_STATES dictionary to generate and
+    register a handler for each keyword-value pair. Partially apply each
+    handler with the values from the dictionary, including the new state,
+    text, and keyboard to be used.
 
-@dp.message(Command(commands='cancel'), StateFilter(default_state))
-async def handle_cancel_in_default_state(message: Message):
-    await message.answer(
-        text=FALSE_CANCEL
-    )
+    Register the handler to handle callback queries that match the
+    StateFilter and data prefix for the keyword.
 
+    Note:
+    - This function assumes that PHRASES_AND_STATES, logger, dp, FSMSearchAC,
+    and generate_handlers are all defined in the current namespace.
+    - The generate_handlers function should accept the keyword, new_state,
+    text and keyboard as keyword arguments.
 
-@dp.message(Command(commands='cancel'), ~StateFilter(default_state))
-async def handle_cancel_in_state(message: Message, state: FSMContext):
-    await message.answer(
-        text=CANCEL
-    )
-    await state.clear()
+    Arguments:
+    None
 
-
-@dp.message(StateFilter(FSMSearchAC.get_url),
-            lambda x: F.text and pattern_url.match(x.text)
+    Returns:
+    None
+    """
+    try:
+        for keyword, value in PHRASES_AND_STATES.items():
+            logger.debug(
+                f"\nRegister a handler:\n"
+                f"Keyword: {keyword}\nValue: {value}"
             )
+            handler = partial(
+                generate_handlers,
+                keyword=keyword,
+                new_state=value.state,
+                text_key=MESSAGES.get(value.phrase_key),
+                keyboard=value.keyboard,
+            )
+            logger.debug(f"Created handler: {handler}\n")
+            router.callback_query.register(
+                handler,
+                StateFilter(getattr(FSMSearchAC, f"{keyword}_selection")),
+                F.data.startswith(f"{keyword}="),
+            )
+    except NameError as error:
+        logger.error(f"NameError: {error}")
+    except AttributeError as error:
+        logger.error(f"AttributeError: {error}")
+    except TypeError as error:
+        logger.error(f"TypeError: {error}")
+
+
+@router.callback_query(
+    StateFilter(FSMSearchAC.make_url_or_past),
+    F.data.in_(["url_paste", "url_form"]),
+)
+async def handle_url_buttons(
+    callback: CallbackQuery, state: FSMContext
+) -> None:
+    """
+    Handles clicks on the 'url_paste' and 'url_form' buttons
+    in the bot interface. Serves as the entry point into the
+    chain of dynamically created handlers through the 'url_form'
+    branch. In this case, generates a keyboard to select the size
+    of the monster.
+
+    Arguments:
+    :param callback: CallbackQuery - the aiogram callback query object
+    :param state: FSMContext - the current FSM state of the user
+
+    Returns:
+    None
+    """
+    try:
+        await safe_answer_callback(callback)
+        chat_id = callback.message.chat.id  # type: ignore # In try block
+        if callback.data == "url_paste":
+            await safe_send_message(
+                chat_id=chat_id,
+                text=MESSAGES.get("INSERT_LINK", MESSAGE_TEXT_ERROR),
+                state=state,
+            )
+            await state.set_state(FSMSearchAC.get_url)
+        if callback.data == "url_form":
+            keyboard = get_selection_keyboard(
+                "size", await get_current_language(state)
+            )
+            await safe_send_message(
+                chat_id=chat_id,
+                text=MESSAGES.get("PHRASE_SIZE", MESSAGE_TEXT_ERROR),
+                state=state,
+                reply_markup=keyboard,
+            )
+            logger.debug(f"CALLBACK DATA = {callback.data}")
+            current_state = await state.get_state()
+            logger.debug(f"Curent state: {current_state}")
+            await state.set_state(FSMSearchAC.size_selection)
+            new_state = await state.get_state()
+            logger.debug(f"New state: {new_state}")
+    except TimeoutError as error:
+        logger.critical(f"Network error: {error}")
+    except AttributeError as error:
+        logger.error(f"Attribute error: {error}")
+    except KeyError as error:
+        logger.error(f"Key error: {error}")
+
+
+@router.message(
+    StateFilter(FSMSearchAC.get_url),
+    lambda x: F.text and pattern_url.match(x.text),
+)
 async def handle_url(message: Message, state: FSMContext):
+    """
+    Handles a valid URL input from the user.
+
+    This function triggers when the user is in the `FSMSearchAC.get_url` state
+    and sends a message that matches the URL pattern. It updates the FSM state
+    with the provided URL and then asks the user to enter the armor class,
+    transitioning to the `FSMSearchAC.get_armor_class` state.
+
+    Arguments:
+    :param message: Message - The message object containing the user's text.
+    :param state: FSMContext - The current FSM state of the user.
+
+    Returns:
+    None
+    """
     await state.update_data(url=message.text)
-    await message.answer(text=INVITE_ENTER_ARMOR_CLASS_TEXT)
+    chat_id = message.chat.id
+    await safe_send_message(
+        chat_id=chat_id,
+        text=MESSAGES.get("INVITE_ENTER_ARMOR_CLASS_TEXT", MESSAGE_TEXT_ERROR),
+        state=state,
+    )
     await state.set_state(FSMSearchAC.get_armor_class)
 
 
-@dp.message(StateFilter(FSMSearchAC.get_url))
-async def warning_not_url(message: Message):
-    await message.answer(
-        text=WRONG_LINK
-    )
-
-
-@dp.message(StateFilter(FSMSearchAC.get_armor_class),
-            lambda x: F.text and pattern_armor_class.match(x.text)
-            )
+@router.message(
+    StateFilter(FSMSearchAC.get_armor_class),
+    lambda x: F.text.regexp(pattern_armor_class),
+)
 async def handle_armor_class(message: Message, state: FSMContext):
-    matches: Optional[Match] = pattern_armor_class.match(message.text)
+    """
+    Handles the user's input for armor class and proceeds to scrape for
+    monster cards.
+
+    This function is triggered when the state machine is in the
+    FSMSearchAC.get_armor_class
+    state and the user's input matches the valid armor class pattern.
+    It scrapes the bestiary website using the URL and filters the monster
+    cards based on the armor class range specified.
+
+    Arguments:
+    :param message: Message - the message object that contains the user's text.
+    :param state: FSMContext - the current FSM state of the user.
+
+    Returns:
+    None
+
+    Exceptions:
+    The function expects the pattern to be matched already and therefore does
+    not catch ValueError exceptions related to conversion to integers.
+    """
+    matches: Optional[Match] = re.match(
+        # message.text can't be None becouse filtered by regexp
+        pattern_armor_class,
+        message.text,  # type: ignore
+    )
     if matches:
         min_armor_class = int(matches.group(1))
-        max_armor_class = (int(matches.group(2))
-                           if matches.group(2) else min_armor_class)
+        max_armor_class = (
+            int(matches.group(2)) if matches.group(2) else min_armor_class
+        )
     data = await state.get_data()
-    formed_url = await form_final_url(state, BASE_FORMED_URL)
-    url = data.get('url') or formed_url
-    print('Ссылка', url)
-    monsters: list[MonsterCard] = await scrap_bestiary(url,
-                                                       min_armor_class,
-                                                       max_armor_class
-                                                       )
+    if not data:
+        logger.critical("Empty data")
+        await bag_report(chat_id=message.chat.id, state=state)
+    formed_url = await form_final_url(data, BASE_FORMED_URL)
+    url = data.get("url", formed_url)  # Обратить внимание
+    logger.debug("Link to be used: {url}")
+    monsters: List[MonsterCard]
+    try:
+        monsters = await scrape_bestiary(url, min_armor_class, max_armor_class)
+    except Exception as error:
+        logger.error(f"Scraping failed: {error}")
+        monsters = []
+
     if not monsters:
         await state.clear()
-        await bot.send_message(
+        await safe_send_message(
             chat_id=message.chat.id,
-            text=EMPTY_LIST
+            text=MESSAGES.get("EMPTY_LIST", MESSAGE_TEXT_ERROR),
+            state=state,
         )
         return None
-    await state.set_data({'monsters': monsters})
+    await state.set_data({"monsters": monsters})
     await state.set_state(FSMSearchAC.sort_results)
-    keyboard = get_sorting_keyboard()
-    await bot.send_message(message.chat.id, CHOICE_SORT_METHOD,
-                           reply_markup=keyboard
-                           )
+    keyboard = get_sorting_keyboard(await get_current_language(state))
+    await safe_send_message(
+        chat_id=message.chat.id,
+        text=MESSAGES.get("CHOICE_SORT_METHOD", MESSAGE_TEXT_ERROR),
+        state=state,
+        reply_markup=keyboard,
+    )
 
 
-@dp.callback_query(StateFilter(FSMSearchAC.sort_results),
-                   F.data.in_(['sort_by_danger',
-                               'sort_by_ac',
-                               'sort_by_title'])
-                   )
-async def handle_sort_buttons_(callback: CallbackQuery, state: FSMContext):
-    await callback.answer()
-    data = await state.get_data()
+@router.callback_query(
+    StateFilter(FSMSearchAC.sort_results),
+    F.data.in_(
+        [
+            BUTTON_TEXT["SORT_BY_DANGER"],
+            BUTTON_TEXT["SORT_BY_AC"],
+            BUTTON_TEXT["SORT_BY_TITLE"],
+        ]
+    ),
+)
+async def handle_sort_buttons(
+    callback: CallbackQuery, state: FSMContext
+) -> None:
+    """
+    Handle sort buttons after a sorting criterion is selected.
+
+    1. Respond to the callback query.
+    2. Retrieve the current state data.
+    3. Validate the sorting key.
+    4. Sort the list of monsters based on the selected key.
+    5. Send the sorted list of monsters to the user.
+    6. Clear the state.
+
+    Arguments:
+    :param callback: CallbackQuery - the aiogram callback query object
+    :param state: FSMContext - the current FSM state of the user
+
+    Returns:
+    None
+    """
+    await safe_answer_callback(callback)
+    try:
+        data = await state.get_data()
+        chat_id = callback.message.chat.id  # type: ignore # In try block
+    except EmptyDataError as error:
+        logger.error(f"state is None: {error}")
+    except AttributeError as error:
+        logger.error(f"message is None: {error}")
+    current_language = await get_current_language(state)
     sort_key = callback.data
-    chat_id = callback.message.chat.id
     if sort_key not in SORTING_KEYS:
-        await bot.send_message(
+        await safe_send_message(
             chat_id=chat_id,
-            text=(SORT_ERROR)
+            text=MESSAGES.get("SORT_ERROR", MESSAGE_TEXT_ERROR),
+            state=state,
         )
         return
-    monsters = data.get('monsters')
+    monsters: List[MonsterCard] = data.get("monsters", [])
+    if monsters:
+        logger.critical("No monsters in data")
     monsters.sort(key=SORTING_KEYS[sort_key])
-    formatted_monsters = '\n\n'.join([str(monster) for monster in monsters])
+    # Formats a list of monster objects into a string,
+    # setting each monster's language.
+    formatted_monsters = "\n\n".join(
+        [
+            str((lambda m: m.set_language(current_language) or m)(monster))
+            for monster in monsters
+        ]
+    )
     for output_part in split_message(formatted_monsters):
-        await bot.send_message(
-            chat_id=chat_id,
-            text=output_part
-        )
+        await safe_send_message(chat_id=chat_id, text=output_part, state=state)
         await asyncio.sleep(0.5)
     await state.clear()
-    await bot.send_message(
+    await safe_send_message(
         chat_id=chat_id,
-        text=FINAL_WORD
+        text=MESSAGES.get("FINAL_WORD", MESSAGE_TEXT_ERROR),
+        state=state,
     )
 
 
-@dp.message(StateFilter(FSMSearchAC.get_armor_class))
-async def warning_not_age(message: Message):
-    await message.answer(
-        text=ARMOR_CLASS_ERROR
-    )
-
-
-@dp.message(StateFilter(default_state))
-async def handle_input_in_default_state(message: Message):
-    await message.reply(text=INPUT_ERROR)
+router.include_router(exception_router)
 
 
 async def main():
-    await dynamic_handlers_registration()
+    """
+    The main function that starts the bot's operation.
+
+    Actions:
+        1. Logs that the program has started.
+        2. Registers dynamic handlers.
+        3. Starts message polling.
+    """
+    logger.info("The program has started")
+    try:
+        await dynamic_handlers_registration()
+        logger.debug("Registration of dynamic handlers completed.")
+        dp.include_router(router)
+        await dp.start_polling(bot)
+    except (TelegramAPIError, EnvError) as error:
+        logger.critical(f"Telegram API error: {error}")
+    logger.debug("Polling started")
     print(
-          '\n ДЕМО-версия телеграм бота.\n'
-          ' Для полноценного и стабильного релиза\n'
-          ' требуется платный интернет хостинг.\n'
-          ' Демоверсия использует в качестве хостинга ваш компьютер.\n'
-          '\n ВНИМАНИЕ: не закрывайте программу, пока не закончите работу.\n'
-          ' Бот не работает без запущенной программы.\n'
-          '\n Название телеграм бота: Monster Armor Class\n'
-          '\n Имя бота для поиска: @monster_armor_class_bot\n'
-          '\n Для остановки бота закройте программу\n'
-          ' или нажмите ctrl+c.\n'
-          )
-    await dp.start_polling(bot)
+        "\n ДЕМО-версия телеграм бота.\n"
+        " Для полноценного и стабильного релиза\n"
+        " требуется платный интернет хостинг.\n"
+        " Демоверсия использует в качестве хостинга ваш компьютер.\n"
+        "\n ВНИМАНИЕ: не закрывайте программу, пока не закончите работу.\n"
+        " Бот не работает без запущенной программы.\n"
+        "\n Название телеграм бота: Monster Armor Class\n"
+        "\n Имя бота для поиска: @monster_armor_class_bot\n"
+        "\n Для остановки бота закройте программу\n"
+        " или нажмите ctrl+c.\n"
+    )
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
-        print('До свидания!')
+        print("До свидания!")

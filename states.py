@@ -2,22 +2,20 @@
 The module contains a set of states, messages corresponding to them,
 and the order of transition from one state to another.
 """
-
-from collections import namedtuple
+from typing import Optional
 
 from aiogram.fsm.state import State, StatesGroup
 
-from messages import (
-    INVITE_ENTER_ARMOR_CLASS_TEXT,
-    PHRASE_TYPE,
-    PHRASE_ALIGNMENT,
-    PHRASE_DANGER,
-    PHRASE_ENVIRONMENT,
-    PHRASE_SPEED
-)
+
+class MessageAndState:
+    def __init__(self, phrase_key: str, state: State, keyboard: Optional[str]):
+        self.phrase_key: str = phrase_key
+        self.state: State = state
+        self.keyboard: Optional[str] = keyboard
 
 
 class FSMSearchAC(StatesGroup):
+    choose_language = State()
     make_url_or_past = State()
     get_url = State()
     get_armor_class = State()
@@ -31,40 +29,35 @@ class FSMSearchAC(StatesGroup):
     speed_selection = State()
 
 
-Phrase_and_state = namedtuple(
-    'Phrase_and_state',
-    ['phrase', 'state', 'keyboard']
-    )
-
 PHRASES_AND_STATES = {
-    'size': Phrase_and_state(
-        phrase=PHRASE_TYPE,
+    "size": MessageAndState(
+        phrase_key="PHRASE_TYPE",
         state=FSMSearchAC.type_selection,
-        keyboard='type'
+        keyboard="type",
     ),
-    'type': Phrase_and_state(
-        phrase=PHRASE_ALIGNMENT,
+    "type": MessageAndState(
+        phrase_key="PHRASE_ALIGNMENT",
         state=FSMSearchAC.alignment_selection,
-        keyboard='alignment'
+        keyboard="alignment",
     ),
-    'alignment': Phrase_and_state(
-        phrase=PHRASE_DANGER,
+    "alignment": MessageAndState(
+        phrase_key="PHRASE_DANGER",
         state=FSMSearchAC.danger_selection,
-        keyboard='danger'
+        keyboard="danger",
     ),
-    'danger': Phrase_and_state(
-        phrase=PHRASE_ENVIRONMENT,
+    "danger": MessageAndState(
+        phrase_key="PHRASE_ENVIRONMENT",
         state=FSMSearchAC.environment_selection,
-        keyboard='environment'
+        keyboard="environment",
     ),
-    'environment': Phrase_and_state(
-        phrase=PHRASE_SPEED,
+    "environment": MessageAndState(
+        phrase_key="PHRASE_SPEED",
         state=FSMSearchAC.speed_selection,
-        keyboard='speed'
+        keyboard="speed",
     ),
-    'speed': Phrase_and_state(
-        phrase=INVITE_ENTER_ARMOR_CLASS_TEXT,
+    "speed": MessageAndState(
+        phrase_key="INVITE_ENTER_ARMOR_CLASS_TEXT",
         state=FSMSearchAC.get_armor_class,
-        keyboard=None
-    )
+        keyboard=None,
+    ),
 }

@@ -34,37 +34,38 @@ class MonsterCard:
     """
 
     FIELDS_NAME = {
-        'en': {
-            'NAME': 'Name',
-            'URL': 'URL',
-            'ARMOR_CLASS':
-            'Armor Class',
-            'DANGER': 'Danger'
+        "en": {
+            "NAME": "Name",
+            "URL": "URL",
+            "ARMOR_CLASS": "Armor Class",
+            "DANGER": "Danger",
         },
-        'ru': {
-            'NAME': 'Название',
-            'URL': 'URL',
-            'ARMOR_CLASS': 'Класс Доспеха',
-            'DANGER': 'Опасность'
-            }
+        "ru": {
+            "NAME": "Название",
+            "URL": "URL",
+            "ARMOR_CLASS": "Класс Доспеха",
+            "DANGER": "Опасность",
+        },
     }
 
-    DANGER_RATE_STRINGS = {
-        0.125: '1/8',
-        0.25: '1/4',
-        0.5: '1/2'
-    }
+    DANGER_RATE_STRINGS = {0.125: "1/8", 0.25: "1/4", 0.5: "1/2"}
 
-    def __init__(self, title, link, armor_class, danger_rate_str):
+    def __init__(
+        self,
+        title: str,
+        link: str,
+        armor_class: Optional[int],
+        danger_rate_str: Optional[str],
+    ):
         self.title: str = title
         self.link: str = link
         self.armor_class: Optional[int] = (
             armor_class if armor_class is not None else 0
         )
         self.danger_rate: float = self.__danger_to_float(danger_rate_str)
-        self.language: str = 'en'
+        self.language: str = "en"
 
-    def __danger_to_float(self, danger_str: str) -> float:
+    def __danger_to_float(self, danger_str: Optional[str]) -> float:
         """
         Convert the input string to a floating-point number.
 
@@ -79,21 +80,21 @@ class MonsterCard:
         if not danger_str:
             return 0.0
 
-        if '/' in danger_str:
-            numerator, denominator = danger_str.split('/')
+        if "/" in danger_str:
+            numerator, denominator = danger_str.split("/")
             try:
                 return float(numerator) / float(denominator)
             except (ValueError, ZeroDivisionError) as error:
-                logger.error(f'Danger Conversion Error - {error}')
+                logger.error(f"Danger Conversion Error - {error}")
                 return 0.0
 
         try:
             return float(danger_str)
         except ValueError as error:
-            logger.error(f'Danger Conversion Error - {error}')
+            logger.error(f"Danger Conversion Error - {error}")
             return 0.0
 
-    def set_language(self, language: str) -> None:
+    def set_language(self, language: str) -> "MonsterCard":
         """
         Set the language for the MonsterCard object.
 
@@ -105,19 +106,22 @@ class MonsterCard:
             English and 'ru' for Russian.
 
         Returns:
-            None
+            self object MonsterCard
 
         Raises:
             ValueError: If the provided language code is not supported.
         """
         if language not in self.FIELDS_NAME.keys():
-            logger.error(f'Unsupported language code: {language}.')
-            raise ValueError(f'Unsupported language code: {language}')
+            logger.error(f"Unsupported language code: {language}.")
+            raise ValueError(f"Unsupported language code: {language}")
         self.language = language
+        return self
 
     def __repr__(self):
-        return (f'<MonsterCard(title="{self.title}", '
-                'armor_class={self.armor_class})>')
+        return (
+            f'<MonsterCard(title="{self.title}", '
+            "armor_class={self.armor_class})>"
+        )
 
     def __str__(self):
         """
@@ -133,12 +137,10 @@ class MonsterCard:
             in a human-readable format.
         """
         danger_str = MonsterCard.DANGER_RATE_STRINGS.get(
-            self.danger_rate,
-            f'{self.danger_rate:.0f}'
+            self.danger_rate, f"{self.danger_rate:.0f}"
         )
         local_field_names = self.FIELDS_NAME.get(
-            self.language,
-            self.FIELDS_NAME['en']
+            self.language, self.FIELDS_NAME["en"]
         )
         return (
             f'{local_field_names["NAME"]}: {self.title}\n'

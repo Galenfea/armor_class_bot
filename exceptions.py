@@ -3,6 +3,7 @@ class EnvError(Exception):
     An exception occurs when there are errors
     related to environment variables.
     """
+
     pass
 
 

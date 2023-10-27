@@ -1,38 +1,37 @@
-
 log_config = {
-    'version': 1,
-    'handlers': {
-        'handler': {
-            'class': 'logging.handlers.RotatingFileHandler',
-            'formatter': 'formatter',
-            'filename': 'armor_class_bot.log',
-            'mode': 'a',
-            'maxBytes': 5000,
-            'backupCount': 5,
-            'encoding': 'utf-8'
+    "version": 1,
+    "handlers": {
+        "handler": {
+            "class": "logging.handlers.RotatingFileHandler",
+            "formatter": "formatter",
+            "filename": "armor_class_bot.log",
+            "mode": "a",
+            "maxBytes": 5000,
+            "backupCount": 5,
+            "encoding": "utf-8",
         },
     },
-    'loggers': {
-        'armor_class_bot': {
-            'handlers': ['handler'],
-            'level': 'DEBUG',
+    "loggers": {
+        "armor_class_bot": {
+            "handlers": ["handler"],
+            "level": "DEBUG",
         },
-        'scraper': {
-            'handlers': ['handler'],
-            'level': 'DEBUG',
+        "scraper": {
+            "handlers": ["handler"],
+            "level": "DEBUG",
         },
-        'monster_card': {
-            'handlers': ['handler'],
-            'level': 'DEBUG',
+        "monster_card": {
+            "handlers": ["handler"],
+            "level": "DEBUG",
         },
-        'keyboards': {
-            'handlers': ['handler'],
-            'level': 'DEBUG',
+        "keyboards": {
+            "handlers": ["handler"],
+            "level": "DEBUG",
+        },
+    },
+    "formatters": {
+        "formatter": {
+            "format": ("%(asctime)s %(levelname)s %(funcName)s %(message)s")
         }
     },
-    'formatters': {
-        'formatter': {
-            'format': ('%(asctime)s %(levelname)s %(funcName)s %(message)s')
-        }
-    }
 }
