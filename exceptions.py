@@ -9,3 +9,5 @@ class EnvError(Exception):
 
 class EmptyDataError(Exception):
     """An exception means there is no data where it should be."""
+
+    pass

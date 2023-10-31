@@ -1,4 +1,5 @@
 import logging
+import re
 from logging.config import dictConfig
 from typing import Optional
 
@@ -77,7 +78,7 @@ class MonsterCard:
             floating-point number.
             If conversion is not possible, it returns 0.0.
         """
-        if not danger_str:
+        if not danger_str or danger_str == "—":
             return 0.0
 
         if "/" in danger_str:
@@ -142,8 +143,15 @@ class MonsterCard:
         local_field_names = self.FIELDS_NAME.get(
             self.language, self.FIELDS_NAME["en"]
         )
+
+        title_to_display = self.title
+        # If english language don't show russian name
+        if self.language != "ru":
+            match = re.search(r"\[(.*)\]", title_to_display)
+            title_to_display = match.group(1) if match else title_to_display
+
         return (
-            f'{local_field_names["NAME"]}: {self.title}\n'
+            f'{local_field_names["NAME"]}: {title_to_display}\n'
             f'{local_field_names["URL"]}: {self.link}\n'
             f'{local_field_names["ARMOR_CLASS"]}: {self.armor_class}\n'
             f'{local_field_names["DANGER"]}: {danger_str}'

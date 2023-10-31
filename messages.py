@@ -5,10 +5,10 @@ main module and in the "states" module.
 """
 from typing import Dict, Union
 
-MESSAGE_TEXT_ERROR = "Message text error"
+MESSAGE_TEXT_ERROR: str = "Message text error"
 
 MESSAGES: Dict[str, Union[str, Dict[str, str]]] = {
-    "CHOOSE_USER_LANGUAGE": "Choose language | Выберите язык",
+    "CHOOSE_USER_LANGUAGE": "Choose language        | Выберите язык",
     "PHRASE_SIZE": {
         "en": "Choose the size of the monster",
         "ru": "Выберите размер монстра",

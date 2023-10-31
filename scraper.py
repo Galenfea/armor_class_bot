@@ -2,12 +2,12 @@ import asyncio
 import logging
 import re
 from logging.config import dictConfig
-from typing import Any, Callable, List, Optional, Type, TypeVar, Tuple, Union
+from typing import Any, Callable, List, Optional, Tuple, Type, TypeVar, Union
 
 import aiohttp
 from bs4 import BeautifulSoup, ResultSet, Tag
 
-from constantns import SCRAPER_SETTINGS, SCRAPER_CONSTANTS
+from constantns import SCRAPER_CONSTANTS, SCRAPER_SETTINGS
 from exceptions import EmptyDataError
 from log_config import log_config
 from monster_card import MonsterCard
@@ -76,7 +76,7 @@ def is_last_page(soup: BeautifulSoup) -> bool:
         raise EmptyDataError("There is no li tags in pagination")
     for tag in li_tags:
         text = tag.get_text()
-        if SCRAPER_SETTINGS["NEXT_PAGE_INDICATOR"] in text:
+        if SCRAPER_CONSTANTS["NEXT_PAGE_INDICATOR"] in text:
             return False
     return True
 
@@ -120,7 +120,7 @@ def get_link(title_tag: Tag) -> str:
         and "href" in suffix_link.attrs
         and not isinstance(suffix_link["href"], list)
     ):
-        link = suffix_link["href"]
+        link = SCRAPER_CONSTANTS["BASE_URL"] + suffix_link["href"]
     check_if_none(link, "There is no link")
     return link  # type: ignore [return-value] # Chekced by check_if_none()
 
@@ -177,20 +177,23 @@ def get_armor_class_and_danger(
     check_if_none(params, "There is no ul tags with params class")
     li_tags = safe_method_call(params, Tag, Tag.find_all, "li")
     check_if_none(li_tags, "There is no li tags in ul tag with params class")
+    logger.debug(f"Is li_tags? - {bool(li_tags)}")
     for tag in li_tags:  # type: ignore [union-attr] # Checked by check_if_none
         text = tag.get_text()
-        armor_class = read_characteristic(
-            tag,
-            text,
-            SCRAPER_CONSTANTS["ARMOR_CLASS"],
-            SCRAPER_CONSTANTS["ARMOR_PATTERN"],
-        )
-        danger_rate = read_characteristic(
-            tag,
-            text,
-            SCRAPER_CONSTANTS["DANGER"],
-            SCRAPER_CONSTANTS["DANGER_PATTERN"],
-        )
+        if armor_class is None:
+            armor_class = read_characteristic(
+                tag,
+                text,
+                SCRAPER_CONSTANTS["ARMOR_CLASS"],
+                SCRAPER_CONSTANTS["ARMOR_PATTERN"],
+            )
+        if danger_rate is None:
+            danger_rate = read_characteristic(
+                tag,
+                text,
+                SCRAPER_CONSTANTS["DANGER"],
+                SCRAPER_CONSTANTS["DANGER_PATTERN"],
+            )
     logger.debug(f"armor class = {armor_class}, danger = {danger_rate}")
     return armor_class, danger_rate
 
@@ -341,7 +344,7 @@ async def scrape_bestiary(
             except EmptyDataError as error:
                 logger.error(f"Scraper error - {error}")
             monsters_list.extend(
-                await scrape_cards(
+                scrape_cards(
                     cards,  # type: ignore # Already checked by check_if_none()
                     min_armor_class,
                     max_armor_class,

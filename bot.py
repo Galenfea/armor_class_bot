@@ -13,7 +13,7 @@ from aiogram.fsm.state import State, default_state
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import CallbackQuery, Message
 
-from constantns import BUTTON_TEXT, LANGUAGES
+from constantns import CALLBACK_DATA, LANGUAGES
 from exception_routes import exception_router
 from exceptions import EmptyDataError, EnvError
 from keyboards import (
@@ -51,14 +51,16 @@ SORTING_KEYS = {
 BASE_FORMED_URL = "https://dnd.su/bestiary/?search="
 
 storage = MemoryStorage()
+logger.debug("Before SingletonBot instance creation")
 bot = SingletonBot()
+logger.debug("After SingletonBot instance creation\n\n")
 dp = Dispatcher(storage=storage)
 router = Router()
 
 pattern_url = re.compile(
     r"^https://dnd\.su/bestiary/\?search=(&[\w\-]+=[\w\-]+)*$"
 )
-pattern_armor_class = r"^(\d+)(?:\s+(\d+))?$"
+pattern_armor_class = re.compile(r"^(\d+)(?:\s+(\d+))?$")
 min_armor_class = 0
 max_armor_class = 0
 monster_data: Optional[List[MonsterCard]] = []
@@ -134,22 +136,31 @@ async def generate_handlers(
 
         await safe_answer_callback(callback)
         if callback.data != f"{keyword}=_":
+            logger.debug({f"url_{keyword}": callback.data})
             await state.update_data({f"url_{keyword}": callback.data})
+        logger.debug("Current state?")
         await logstate(state, "Current state in generate_handlers")
 
         await state.set_state(state=new_state)
         await logstate(state, "New state after set_state in generate_handlers")
-
+        logger.debug(
+            "Before safe send message\n"
+            f"chat_id {callback.message.chat.id}"  # type: ignore
+            "Text_key: {text_key}, state: {state}"
+        )
         await safe_send_message(
             chat_id=callback.message.chat.id,  # type: ignore # In try block
             text=MESSAGES.get(text_key, MESSAGE_TEXT_ERROR),
             state=state,
             reply_markup=get_selection_keyboard(keyboard, curretnt_language),
         )
+        logger.debug("After safe send message")
     except (AttributeError, ValueError) as error:
         logger.error(f"Error while processing callback: {error}")
     except (TimeoutError, ConnectionError) as error:
         logger.critical(f"Network-related error: {error}")
+    except TypeError as error:
+        logger.error(f"Message Error: {error}")
 
 
 async def dynamic_handlers_registration() -> None:
@@ -179,22 +190,25 @@ async def dynamic_handlers_registration() -> None:
     """
     try:
         for keyword, value in PHRASES_AND_STATES.items():
-            logger.debug(
-                f"\nRegister a handler:\n"
-                f"Keyword: {keyword}\nValue: {value}"
-            )
             handler = partial(
                 generate_handlers,
                 keyword=keyword,
                 new_state=value.state,
-                text_key=MESSAGES.get(value.phrase_key),
+                text_key=value.phrase_key,
                 keyboard=value.keyboard,
             )
-            logger.debug(f"Created handler: {handler}\n")
+            logger.debug(
+                f"Created handler: {bool(handler)}\n"
+                f"Keyword: {keyword}, Keyboard: {value.keyboard}"
+            )
             router.callback_query.register(
                 handler,
                 StateFilter(getattr(FSMSearchAC, f"{keyword}_selection")),
                 F.data.startswith(f"{keyword}="),
+            )
+            logger.debug(
+                f"router registered: {keyword}_selection\n"
+                f"F.data start {keyword}="
             )
     except NameError as error:
         logger.error(f"NameError: {error}")
@@ -291,7 +305,7 @@ async def handle_url(message: Message, state: FSMContext):
 
 @router.message(
     StateFilter(FSMSearchAC.get_armor_class),
-    lambda x: F.text.regexp(pattern_armor_class),
+    lambda x: F.text and pattern_armor_class.match(x.text),
 )
 async def handle_armor_class(message: Message, state: FSMContext):
     """
@@ -315,11 +329,15 @@ async def handle_armor_class(message: Message, state: FSMContext):
     The function expects the pattern to be matched already and therefore does
     not catch ValueError exceptions related to conversion to integers.
     """
-    matches: Optional[Match] = re.match(
-        # message.text can't be None becouse filtered by regexp
-        pattern_armor_class,
-        message.text,  # type: ignore
-    )
+    if message.text:
+        message_text = message.text
+    else:
+        message_text = ""
+        logger.error(
+            "Wrong min max armor_class pattern in filter %s", message.text
+        )
+
+    matches: Optional[Match] = pattern_armor_class.match(message_text)
     if matches:
         min_armor_class = int(matches.group(1))
         max_armor_class = (
@@ -330,7 +348,7 @@ async def handle_armor_class(message: Message, state: FSMContext):
         logger.critical("Empty data")
         await bag_report(chat_id=message.chat.id, state=state)
     formed_url = await form_final_url(data, BASE_FORMED_URL)
-    url = data.get("url", formed_url)  # Обратить внимание
+    url = data.get("url", formed_url)  # Attention
     logger.debug("Link to be used: {url}")
     monsters: List[MonsterCard]
     try:
@@ -347,7 +365,7 @@ async def handle_armor_class(message: Message, state: FSMContext):
             state=state,
         )
         return None
-    await state.set_data({"monsters": monsters})
+    await state.update_data({"monsters": monsters})
     await state.set_state(FSMSearchAC.sort_results)
     keyboard = get_sorting_keyboard(await get_current_language(state))
     await safe_send_message(
@@ -362,9 +380,9 @@ async def handle_armor_class(message: Message, state: FSMContext):
     StateFilter(FSMSearchAC.sort_results),
     F.data.in_(
         [
-            BUTTON_TEXT["SORT_BY_DANGER"],
-            BUTTON_TEXT["SORT_BY_AC"],
-            BUTTON_TEXT["SORT_BY_TITLE"],
+            CALLBACK_DATA["SORT_BY_DANGER"],
+            CALLBACK_DATA["SORT_BY_AC"],
+            CALLBACK_DATA["SORT_BY_TITLE"],
         ]
     ),
 )
@@ -406,7 +424,8 @@ async def handle_sort_buttons(
         )
         return
     monsters: List[MonsterCard] = data.get("monsters", [])
-    if monsters:
+    logger.debug(f"Is there monsters? {bool(monsters)}")
+    if not monsters:
         logger.critical("No monsters in data")
     monsters.sort(key=SORTING_KEYS[sort_key])
     # Formats a list of monster objects into a string,
@@ -420,15 +439,41 @@ async def handle_sort_buttons(
     for output_part in split_message(formatted_monsters):
         await safe_send_message(chat_id=chat_id, text=output_part, state=state)
         await asyncio.sleep(0.5)
-    await state.clear()
     await safe_send_message(
         chat_id=chat_id,
         text=MESSAGES.get("FINAL_WORD", MESSAGE_TEXT_ERROR),
         state=state,
     )
+    await state.clear()
 
 
-router.include_router(exception_router)
+async def register_routers() -> None:
+    """
+    Register main and exception routers to the dispatcher.
+
+    This function includes the main router to the dispatcher and the exception
+    router to the main router. It also logs the state of the routers and the
+    dispatcher.
+
+    Note: Assumes that `dp`, `router`, and `exception_router` are already
+    initialized.
+
+    No Args:
+
+    Returns:
+        None
+    """
+    logger.debug("Start register_routers()")
+    dp.include_router(router)
+    logger.debug(f"dp.include_router({router})")
+    router.include_router(exception_router)
+    logger.debug(f"router.include_router({exception_router})")
+    logger.debug("Subrouters: %s", router.sub_routers)
+    logger.debug(
+        "Exception_router: %s", exception_router.resolve_used_update_types()
+    )
+    logger.debug("Router: %s", router.resolve_used_update_types())
+    logger.debug("Dispatcher: %s", dp.resolve_used_update_types())
 
 
 async def main():
@@ -444,27 +489,31 @@ async def main():
     try:
         await dynamic_handlers_registration()
         logger.debug("Registration of dynamic handlers completed.")
-        dp.include_router(router)
+        await register_routers()
+        logger.debug("Routers registered")
+        logger.debug("Bot = %s", bot)
+        logger.debug("Bot = %s", dp)
+        print(
+            "\n ДЕМО-версия телеграм бота.\n"
+            " Для полноценного и стабильного релиза\n"
+            " требуется платный интернет хостинг.\n"
+            " Демоверсия использует в качестве хостинга ваш компьютер.\n"
+            "\n ВНИМАНИЕ: не закрывайте программу, пока не закончите работу.\n"
+            " Бот не работает без запущенной программы.\n"
+            "\n Название телеграм бота: Monster Armor Class\n"
+            "\n Имя бота для поиска: @monster_armor_class_bot\n"
+            "\n Для остановки бота закройте программу\n"
+            " или нажмите ctrl+c.\n"
+        )
         await dp.start_polling(bot)
+        logger.debug("Polling started")
     except (TelegramAPIError, EnvError) as error:
         logger.critical(f"Telegram API error: {error}")
-    logger.debug("Polling started")
-    print(
-        "\n ДЕМО-версия телеграм бота.\n"
-        " Для полноценного и стабильного релиза\n"
-        " требуется платный интернет хостинг.\n"
-        " Демоверсия использует в качестве хостинга ваш компьютер.\n"
-        "\n ВНИМАНИЕ: не закрывайте программу, пока не закончите работу.\n"
-        " Бот не работает без запущенной программы.\n"
-        "\n Название телеграм бота: Monster Armor Class\n"
-        "\n Имя бота для поиска: @monster_armor_class_bot\n"
-        "\n Для остановки бота закройте программу\n"
-        " или нажмите ctrl+c.\n"
-    )
 
 
 if __name__ == "__main__":
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
+        logger.debug("Emergency interruption by keyboard")
         print("До свидания!")

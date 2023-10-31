@@ -8,7 +8,7 @@ from aiogram.fsm.state import default_state
 from aiogram.types import Message
 
 from log_config import log_config
-from messages import MESSAGES, MESSAGE_TEXT_ERROR
+from messages import MESSAGE_TEXT_ERROR, MESSAGES
 from singleton_bot import SingletonBot
 from states import FSMSearchAC
 from utils import safe_send_message

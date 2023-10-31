@@ -1,9 +1,6 @@
 from typing import Dict
 
-LANGUAGES = {
-    'EN': 'en',
-    'RU': 'ru'
-}
+LANGUAGES: Dict[str, str] = {"EN": "en", "RU": "ru"}
 
 # Scraper
 SCRAPER_SETTINGS: Dict[str, int] = {
@@ -26,8 +23,8 @@ SCRAPER_CONSTANTS: Dict[str, str] = {
 }
 
 # Keyboard
-BUTTON_FACTOR = {"columns": 3, "lines": 20}
-BUTTON_TEXT = {
+BUTTON_FACTOR: Dict[str, int] = {"columns": 3, "lines": 20}
+BUTTON_TEXT: Dict[str, Dict[str, str]] = {
     "en": {
         "URL_PASTE": "Paste URL",
         "URL_FORM": "Select Monsters",
@@ -45,7 +42,7 @@ BUTTON_TEXT = {
         "SORT_BY_TITLE": "По названию",
     },
 }
-CALLBACK_DATA = {
+CALLBACK_DATA: Dict[str, str] = {
     "URL_PASTE": "url_paste",
     "URL_FORM": "url_form",
     "SORT_BY_DANGER": "sort_by_danger",

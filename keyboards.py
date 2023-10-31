@@ -44,11 +44,11 @@ def get_url_keyboard(language: str) -> InlineKeyboardMarkup:
 
 def get_selection_keyboard(
     filter_name: str, language: str
-) -> InlineKeyboardMarkup:
+) -> Optional[InlineKeyboardMarkup]:
     """
     Generate and return an inline keyboard based on the given filter name.
 
-    Parameters:
+    Args:
         filter_name (str): The name of the filter for which to generate
         the keyboard.
         language (str): Language code to determine the text on buttons.
@@ -58,17 +58,25 @@ def get_selection_keyboard(
     """
     logger.debug(f"Keyboard name {filter_name}")
     logger.debug(f"Language used: {language}")
-    filter_dict: Optional[
-        Dict[str, Dict[str, str]]
-    ] = SELECTOR.get(filter_name)
+
+    if filter_name is None:
+        return None
+
+    filter_dict: Optional[Dict[str, Dict[str, str]]] = SELECTOR.get(
+        filter_name
+    )
+
     buttons: Optional[Dict[str, str]] = None
+
     if filter_dict is not None:
         buttons = filter_dict.get(language, filter_dict.get("en", None))
-    logger.debug(f"Buttons for {filter_name}: {buttons}")
+
     if buttons is None:
         logger.error(f"There is no buttons for {language} language")
-        return InlineKeyboardMarkup(inline_keyboard=[])
+        return None
+    logger.debug(f"Buttons for {filter_name}: {list(buttons)[:3]}")
     button_iter = iter(buttons.items())
+
     inline_keyboard = [
         [
             InlineKeyboardButton(
@@ -78,6 +86,7 @@ def get_selection_keyboard(
         ]
         for _ in range(BUTTON_FACTOR["lines"])
     ]
+
     inline_keyboard = [row for row in inline_keyboard if row]
     inline_keyboard.append(
         [
@@ -95,7 +104,7 @@ def get_sorting_keyboard(language: str) -> InlineKeyboardMarkup:
     """
     Generate and return an inline keyboard for sorting options.
 
-    Parameters:
+    Args:
         language (str): Language code to determine the text on buttons.
 
     Returns:

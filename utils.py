@@ -19,40 +19,94 @@ MAX_MESSAGE_LENGTH = 4000
 bot = SingletonBot()
 
 
-def dget(dictionary, keys, default=None):
+async def logstate(state: FSMContext, msg: str = "Current state") -> None:
     """
-    Gets a value from a nested dictionary.
+    Log the current state of the finite state machine context.
 
-    :param dictionary: The source dictionary.
-    :param keys: A list of keys.
-    :param default: The default value.
-    :return: The value or the default value.
+    Args:
+        state (FSMContext): The finite state machine context.
+        msg (str, optional): A custom message to include in the log.
+        Default is "Current state".
+
+    Returns:
+        None
     """
-    for key in keys:
-        try:
-            dictionary = dictionary[key]
-        except (TypeError, KeyError):
-            return default
-    else:
-        # Not dictionary really. Just vallue.
-        return dictionary
+    current_state = await state.get_state()
+    logger.debug(f"{msg}: {current_state}")
+
+
+def format_reply_markup_for_log(reply_markup):
+    """
+    Format for logger the provided reply markup for inline keyboard buttons
+
+    Args:
+        reply_markup: The raw reply markup.
+
+    Returns:
+        A formatted list of dictionaries, or None if reply_markup is None.
+    """
+    if reply_markup:
+        return [
+            {"text": button.text, "callback_data": button.callback_data}
+            for row in reply_markup.inline_keyboard[:3]
+            for button in row[:3]
+        ]
+    return None
 
 
 def chek_token(bot_token: str) -> None:
+    """
+    Validate the provided bot token.
+
+    Checks if the bot token is available. If it's not, logs a critical error
+    and raises an exception.
+
+    Args:
+        bot_token (str): The token to validate.
+
+    Returns:
+        None
+
+    Raises:
+        EnvError: If the bot token is missing.
+    """
     if not bot_token:
         logger.critical("Environment variable error")
         raise EnvError("Environment variable error")
 
 
 async def get_current_language(state: FSMContext) -> str:
+    """
+    Retrieve the current language from the finite state machine context.
+
+    Args:
+        state (FSMContext): The finite state machine context.
+
+    Returns:
+        str: The current language set in the state, or "en" if not set.
+    """
+    await logstate(state, "Current state in get_current_language")
     data = await state.get_data()
+    logger.debug(f"data in state = {list(data.keys()) if data else 'None'}")
     return data.get("current_language", "en") if data else "en"
 
 
 async def get_translated_text(
     state: FSMContext, text: Union[dict, str]
 ) -> Optional[str]:
-    current_language = get_current_language(state)
+    """
+    Get text translated to the current language from the state machine context.
+
+    Args:
+        state (FSMContext): The finite state machine context.
+        text (Union[dict, str]): The text to translate. If a dictionary is
+        provided, it should have language codes as keys.
+
+    Returns:
+        Optional[str]: The translated text, or None if not available.
+    """
+    current_language = await get_current_language(state)
+    logger.debug(f"current_language = {current_language}")
     return text.get(current_language) if isinstance(text, dict) else text
 
 
@@ -71,25 +125,42 @@ async def safe_send_message(
     Send a message to a chat in a safe manner by catching TelegramAPIErrors.
     If the message requires a keyboard, attach the keyboard.
 
-    Arguments:
+    Args:
     :param chat_id: int - The ID of the chat where the message will be sent.
     :param text: str - The text of the message to be sent.
 
     Returns:
     None
     """
+    # TODO Place logging parameters in a separate logger settings file.
+    # TODO Ensure logger stability.
     logger.debug(
-        "safe_send_message STARTED" f"chat_id = {chat_id}, text = {text}"
+        "STARTED chat_id = {}, text = {}".format(
+            chat_id,
+            text[:10]
+            if isinstance(text, str)
+            else f"{list(text.keys())[0]}: {str(list(text.values())[0])[:30]}"
+            if text
+            else None,
+        )
     )
     clean_text = await get_translated_text(state, text)
+    logger.debug(f"clean_text = {clean_text[:20] if clean_text else 'None'}")
     try:
         if reply_markup:
-            logger.debug(f"reply_markup = {reply_markup}")
+            logger.debug(
+                f"reply_markup = {format_reply_markup_for_log(reply_markup)}"
+            )
             await bot.send_message(
-                chat_id=chat_id, text=clean_text, reply_markup=reply_markup
+                chat_id=chat_id,
+                text=clean_text,
+                disable_web_page_preview=True,
+                reply_markup=reply_markup,
             )
         else:
-            await bot.send_message(chat_id=chat_id, text=clean_text)
+            await bot.send_message(
+                chat_id=chat_id, text=clean_text, disable_web_page_preview=True
+            )
     except TelegramAPIError as error:
         logger.error(
             f"Error sending telegram message: {error},"
@@ -116,7 +187,7 @@ def split_message(
     Return a list of substrings, each not exceeding the specified
     maximum length.
 
-    Arguments:
+    Args:
     :param text: str - The input text to be split.
     :param max_length: int - The maximum length for each split substring.
 
@@ -146,7 +217,7 @@ async def form_final_url(data: dict, base_url: str) -> str:
     Append these keys and their corresponding values as query parameters
     to the base_url. Return the formed final URL.
 
-    Arguments:
+    Args:
     :param state: FSMContext - the current FSM state of the user.
     :param base_url: str - the base URL to which additional parameters
     will be appended.
@@ -166,7 +237,7 @@ async def safe_answer_callback(callback: CallbackQuery) -> None:
     """
     Safely answer a CallbackQuery by catching TelegramAPIErrors.
 
-    Arguments:
+    Args:
     :param callback: CallbackQuery - The CallbackQuery object to be answered.
 
     Returns:
@@ -179,8 +250,3 @@ async def safe_answer_callback(callback: CallbackQuery) -> None:
             f"Error sending telegram callback: {error},"
             f"type: {type(error).__name__}"
         )
-
-
-async def logstate(state: FSMContext, msg: str = "Current state") -> None:
-    current_state = await state.get_state()
-    logger.debug(f"{msg}: {current_state}")

@@ -6,7 +6,7 @@ log_config = {
             "formatter": "formatter",
             "filename": "armor_class_bot.log",
             "mode": "a",
-            "maxBytes": 5000,
+            "maxBytes": 1000000,
             "backupCount": 5,
             "encoding": "utf-8",
         },
@@ -16,7 +16,11 @@ log_config = {
             "handlers": ["handler"],
             "level": "DEBUG",
         },
-        "scraper": {
+        "exception_routes": {
+            "handlers": ["handler"],
+            "level": "DEBUG",
+        },
+        "keyboards": {
             "handlers": ["handler"],
             "level": "DEBUG",
         },
@@ -24,7 +28,15 @@ log_config = {
             "handlers": ["handler"],
             "level": "DEBUG",
         },
-        "keyboards": {
+        "scraper": {
+            "handlers": ["handler"],
+            "level": "DEBUG",
+        },
+        "singleton_bot": {
+            "handlers": ["handler"],
+            "level": "DEBUG",
+        },
+        "utils": {
             "handlers": ["handler"],
             "level": "DEBUG",
         },
