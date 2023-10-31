@@ -6,7 +6,6 @@ from aiogram.exceptions import TelegramAPIError
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, InlineKeyboardMarkup
 
-from exceptions import EnvError
 from log_config import log_config
 from messages import MESSAGES
 from singleton_bot import SingletonBot
@@ -52,27 +51,6 @@ def format_reply_markup_for_log(reply_markup):
             for button in row[:3]
         ]
     return None
-
-
-def chek_token(bot_token: str) -> None:
-    """
-    Validate the provided bot token.
-
-    Checks if the bot token is available. If it's not, logs a critical error
-    and raises an exception.
-
-    Args:
-        bot_token (str): The token to validate.
-
-    Returns:
-        None
-
-    Raises:
-        EnvError: If the bot token is missing.
-    """
-    if not bot_token:
-        logger.critical("Environment variable error")
-        raise EnvError("Environment variable error")
 
 
 async def get_current_language(state: FSMContext) -> str:
