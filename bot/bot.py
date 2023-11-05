@@ -484,16 +484,16 @@ async def run_bot():
         logger.debug("Bot = %s", bot)
         logger.debug("Bot = %s", dp)
         print(
-            "\n ДЕМО-версия телеграм бота.\n"
-            " Для полноценного и стабильного релиза\n"
-            " требуется платный интернет хостинг.\n"
-            " Демоверсия использует в качестве хостинга ваш компьютер.\n"
-            "\n ВНИМАНИЕ: не закрывайте программу, пока не закончите работу.\n"
-            " Бот не работает без запущенной программы.\n"
-            "\n Название телеграм бота: Monster Armor Class\n"
-            "\n Имя бота для поиска: @monster_armor_class_bot\n"
-            "\n Для остановки бота закройте программу\n"
-            " или нажмите ctrl+c.\n"
+            "\n DEMO version of the Telegram bot.\n"
+            " For a full and stable release,\n"
+            " a paid internet hosting is required.\n"
+            " The demo version uses your computer as the hosting.\n"
+            "\n WARNING: Do not close the program until you finish working.\n"
+            " The bot doesn't work without the program running.\n"
+            "\n Telegram bot name: Monster Armor Class\n"
+            "\n Bot name for search: @monster_armor_class_bot\n"
+            "\n To stop the bot, close the program\n"
+            " or press ctrl+c.\n"
         )
         await dp.start_polling(bot)
         logger.debug("Polling started")

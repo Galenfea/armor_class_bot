@@ -13,4 +13,4 @@ if __name__ == "__main__":
         asyncio.run(run_bot())
     except KeyboardInterrupt:
         logger.debug("Emergency interruption by keyboard")
-        print("До свидания!")
+        print("Goodbye!")
