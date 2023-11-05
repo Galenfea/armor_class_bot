@@ -16,35 +16,35 @@ log_config = {
     "loggers": {
         "armor_class_bot": {
             "handlers": ["handler"],
-            "level": "DEBUG",
+            "level": "INFO",
         },
         "bot": {
             "handlers": ["handler"],
-            "level": "DEBUG",
+            "level": "INFO",
         },
         "exception_routes": {
             "handlers": ["handler"],
-            "level": "DEBUG",
+            "level": "INFO",
         },
         "keyboards": {
             "handlers": ["handler"],
-            "level": "DEBUG",
+            "level": "INFO",
         },
         "monster_card": {
             "handlers": ["handler"],
-            "level": "DEBUG",
+            "level": "INFO",
         },
         "scraper": {
             "handlers": ["handler"],
-            "level": "DEBUG",
+            "level": "INFO",
         },
         "singleton_bot": {
             "handlers": ["handler"],
-            "level": "DEBUG",
+            "level": "INFO",
         },
         "utils": {
             "handlers": ["handler"],
-            "level": "DEBUG",
+            "level": "INFO",
         },
     },
     "formatters": {
