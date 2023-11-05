@@ -490,8 +490,8 @@ async def run_bot():
             " The demo version uses your computer as the hosting.\n"
             "\n WARNING: Do not close the program until you finish working.\n"
             " The bot doesn't work without the program running.\n"
-            "\n Telegram bot name: Monster Armor Class\n"
-            "\n Bot name for search: @monster_armor_class_bot\n"
+            "\n Telegram bot name: Your bot name\n"
+            "\n Bot name for search: @your_bot_name\n"
             "\n To stop the bot, close the program\n"
             " or press ctrl+c.\n"
         )
