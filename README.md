@@ -47,5 +47,5 @@ BOT_TOKEN = 'Your_Telegram_API_token'
 
 _Launch the bot, do:_
 ```
-python bot.py
+python main.py
 ```
