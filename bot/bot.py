@@ -1,6 +1,5 @@
 import asyncio
 import logging
-import re
 from functools import partial
 from logging.config import dictConfig
 from typing import List, Match, Optional
@@ -9,26 +8,20 @@ from aiogram import Dispatcher, F, Router
 from aiogram.exceptions import TelegramAPIError
 from aiogram.filters import CommandStart, StateFilter
 from aiogram.fsm.context import FSMContext
-from aiogram.fsm.state import State, default_state
+from aiogram.fsm.state import default_state, State
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import CallbackQuery, Message
 
-from constantns import CALLBACK_DATA, LANGUAGES
-from exception_routes import exception_router
-from exceptions import EmptyDataError, EnvError
-from keyboards import (
+from bot.exception_routes import exception_router
+from bot.keyboards import (
     get_language_keyboard,
     get_selection_keyboard,
     get_sorting_keyboard,
     get_url_keyboard,
 )
-from log_config import log_config
-from messages import MESSAGE_TEXT_ERROR, MESSAGES
-from monster_card import MonsterCard
-from scraper import scrape_bestiary
-from singleton_bot import SingletonBot
-from states import PHRASES_AND_STATES, FSMSearchAC
-from utils import (
+from bot.singleton_bot import SingletonBot
+from bot.states import FSMSearchAC, PHRASES_AND_STATES
+from bot.utils import (
     bag_report,
     form_final_url,
     get_current_language,
@@ -37,18 +30,21 @@ from utils import (
     safe_send_message,
     split_message,
 )
+from exceptions.exceptions import EmptyDataError, EnvError
+from scraper.monster_card import MonsterCard
+from scraper.scraper import scrape_bestiary
+from settings.constantns import (
+    BASE_FORMED_URL,
+    CALLBACK_DATA,
+    LANGUAGES,
+    PATTERNS,
+    SORTING_KEYS,
+)
+from settings.log_config import log_config
+from settings.messages import MESSAGE_TEXT_ERROR, MESSAGES
 
 dictConfig(log_config)
-logger = logging.getLogger("armor_class_bot")
-
-
-SORTING_KEYS = {
-    "sort_by_danger": MonsterCard.sort_by_danger,
-    "sort_by_ac": MonsterCard.sort_by_ac,
-    "sort_by_title": MonsterCard.sort_by_title,
-}
-
-BASE_FORMED_URL = "https://dnd.su/bestiary/?search="
+logger = logging.getLogger(__name__)
 
 storage = MemoryStorage()
 logger.debug("Before SingletonBot instance creation")
@@ -56,14 +52,6 @@ bot = SingletonBot()
 logger.debug("After SingletonBot instance creation\n\n")
 dp = Dispatcher(storage=storage)
 router = Router()
-
-pattern_url = re.compile(
-    r"^https://dnd\.su/bestiary/\?search=(&[\w\-]+=[\w\-]+)*$"
-)
-pattern_armor_class = re.compile(r"^(\d+)(?:\s+(\d+))?$")
-min_armor_class = 0
-max_armor_class = 0
-monster_data: Optional[List[MonsterCard]] = []
 
 
 @router.message(CommandStart(), StateFilter(default_state))
@@ -275,7 +263,7 @@ async def handle_url_buttons(
 
 @router.message(
     StateFilter(FSMSearchAC.get_url),
-    lambda x: F.text and pattern_url.match(x.text),
+    lambda x: F.text and PATTERNS["URL"].match(x.text),
 )
 async def handle_url(message: Message, state: FSMContext):
     """
@@ -305,7 +293,7 @@ async def handle_url(message: Message, state: FSMContext):
 
 @router.message(
     StateFilter(FSMSearchAC.get_armor_class),
-    lambda x: F.text and pattern_armor_class.match(x.text),
+    lambda x: F.text and PATTERNS["ARMOR_CLASS"].match(x.text),
 )
 async def handle_armor_class(message: Message, state: FSMContext):
     """
@@ -333,11 +321,13 @@ async def handle_armor_class(message: Message, state: FSMContext):
         message_text = message.text
     else:
         message_text = ""
+        min_armor_class: int = 0
+        max_armor_class: int = 30
         logger.error(
             "Wrong min max armor_class pattern in filter %s", message.text
         )
 
-    matches: Optional[Match] = pattern_armor_class.match(message_text)
+    matches: Optional[Match] = PATTERNS["ARMOR_CLASS"].match(message_text)
     if matches:
         min_armor_class = int(matches.group(1))
         max_armor_class = (
@@ -358,12 +348,12 @@ async def handle_armor_class(message: Message, state: FSMContext):
         monsters = []
 
     if not monsters:
-        await state.clear()
         await safe_send_message(
             chat_id=message.chat.id,
             text=MESSAGES.get("EMPTY_LIST", MESSAGE_TEXT_ERROR),
             state=state,
         )
+        await state.clear()
         return None
     await state.update_data({"monsters": monsters})
     await state.set_state(FSMSearchAC.sort_results)
@@ -476,7 +466,7 @@ async def register_routers() -> None:
     logger.debug("Dispatcher: %s", dp.resolve_used_update_types())
 
 
-async def main():
+async def run_bot():
     """
     The main function that starts the bot's operation.
 
@@ -509,11 +499,3 @@ async def main():
         logger.debug("Polling started")
     except (TelegramAPIError, EnvError) as error:
         logger.critical(f"Telegram API error: {error}")
-
-
-if __name__ == "__main__":
-    try:
-        asyncio.run(main())
-    except KeyboardInterrupt:
-        logger.debug("Emergency interruption by keyboard")
-        print("До свидания!")

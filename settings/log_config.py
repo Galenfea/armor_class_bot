@@ -1,10 +1,12 @@
+import os
+
 log_config = {
     "version": 1,
     "handlers": {
         "handler": {
             "class": "logging.handlers.RotatingFileHandler",
             "formatter": "formatter",
-            "filename": "armor_class_bot.log",
+            "filename": os.path.abspath("logs/armor_class_bot.log"),
             "mode": "a",
             "maxBytes": 1000000,
             "backupCount": 5,
@@ -13,6 +15,10 @@ log_config = {
     },
     "loggers": {
         "armor_class_bot": {
+            "handlers": ["handler"],
+            "level": "DEBUG",
+        },
+        "bot": {
             "handlers": ["handler"],
             "level": "DEBUG",
         },

@@ -6,9 +6,9 @@ from aiogram.exceptions import TelegramAPIError
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, InlineKeyboardMarkup
 
-from log_config import log_config
-from messages import MESSAGES
-from singleton_bot import SingletonBot
+from bot.singleton_bot import SingletonBot
+from settings.log_config import log_config
+from settings.messages import MESSAGES
 
 dictConfig(log_config)
 logger = logging.getLogger(__name__)

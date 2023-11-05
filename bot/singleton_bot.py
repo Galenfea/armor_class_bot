@@ -6,8 +6,8 @@ from typing import Optional
 from aiogram import Bot
 from dotenv import load_dotenv
 
-from exceptions import EnvError
-from log_config import log_config
+from exceptions.exceptions import EnvError
+from settings.log_config import log_config
 
 dictConfig(log_config)
 logger = logging.getLogger(__name__)

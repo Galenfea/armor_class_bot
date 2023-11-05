@@ -7,11 +7,11 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import default_state
 from aiogram.types import Message
 
-from log_config import log_config
-from messages import MESSAGE_TEXT_ERROR, MESSAGES
-from singleton_bot import SingletonBot
-from states import FSMSearchAC
-from utils import safe_send_message
+from bot.singleton_bot import SingletonBot
+from bot.states import FSMSearchAC
+from bot.utils import safe_send_message
+from settings.log_config import log_config
+from settings.messages import MESSAGE_TEXT_ERROR, MESSAGES
 
 dictConfig(log_config)
 logger = logging.getLogger(__name__)

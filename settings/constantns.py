@@ -1,6 +1,22 @@
-from typing import Dict
+import re
+from typing import Callable, Dict, Pattern
 
+from scraper.monster_card import MonsterCard
+
+# Bot
 LANGUAGES: Dict[str, str] = {"EN": "en", "RU": "ru"}
+BASE_FORMED_URL: str = "https://dnd.su/bestiary/?search="
+PATTERNS: Dict[str, Pattern] = {
+    "URL": re.compile(
+        r"^https://dnd\.su/bestiary/\?search=(&[\w\-]+=[\w\-]+)*$"
+    ),
+    "ARMOR_CLASS": re.compile(r"^(\d+)(?:\s+(\d+))?$"),
+}
+SORTING_KEYS: Dict[str, Callable] = {
+    "sort_by_danger": MonsterCard.sort_by_danger,
+    "sort_by_ac": MonsterCard.sort_by_ac,
+    "sort_by_title": MonsterCard.sort_by_title,
+}
 
 # Scraper
 SCRAPER_SETTINGS: Dict[str, int] = {

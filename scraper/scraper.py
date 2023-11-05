@@ -7,10 +7,10 @@ from typing import Any, Callable, List, Optional, Tuple, Type, TypeVar, Union
 import aiohttp
 from bs4 import BeautifulSoup, ResultSet, Tag
 
-from constantns import SCRAPER_CONSTANTS, SCRAPER_SETTINGS
-from exceptions import EmptyDataError
-from log_config import log_config
-from monster_card import MonsterCard
+from exceptions.exceptions import EmptyDataError
+from scraper.monster_card import MonsterCard
+from settings.constantns import SCRAPER_CONSTANTS, SCRAPER_SETTINGS
+from settings.log_config import log_config
 
 dictConfig(log_config)
 logger = logging.getLogger(__name__)
@@ -31,12 +31,12 @@ def safe_method_call(
     return None
 
 
-def check_if_none(
+def check_if_empty(
     argument: Union[None, BeautifulSoup, str, Tag, List[Tag], List[str]],
     text: str = "",
 ) -> None:
     """
-    Check if the given argument is None and raise an exception if it is.
+    Check if the given argument is None or [] and raise an exception if it is.
 
     Args:
         argument (Union[None, BeautifulSoup, str, Tag, List[Tag], List[str]]):
@@ -49,7 +49,7 @@ def check_if_none(
     Raises:
         EmptyDataError: If the argument is None.
     """
-    if argument is None:
+    if not argument:
         logger.error(text)
         raise EmptyDataError(text)
 
@@ -95,8 +95,9 @@ def get_title(title_tag: Tag) -> str:
         EmptyDataError: If the title is None.
     """
     title = title_tag.get_text(strip=True) if title_tag else None
-    check_if_none(title, "There is no title")
-    return title  # type: ignore # Already checked by check_if_none()
+    # title can be "" not only None, so it is wrong case if so
+    check_if_empty(title, "Tere is no title in h2 tag")
+    return title  # type: ignore [return-value] # Chekced by check_if_empty
 
 
 def get_link(title_tag: Tag) -> str:
@@ -121,8 +122,8 @@ def get_link(title_tag: Tag) -> str:
         and not isinstance(suffix_link["href"], list)
     ):
         link = SCRAPER_CONSTANTS["BASE_URL"] + suffix_link["href"]
-    check_if_none(link, "There is no link")
-    return link  # type: ignore [return-value] # Chekced by check_if_none()
+    check_if_empty(link, "There is no link")
+    return link  # type: ignore [return-value] # Chekced by check_if_empty
 
 
 def read_characteristic(
@@ -174,11 +175,11 @@ def get_armor_class_and_danger(
     armor_class = None
     danger_rate = None
     params = card.find("ul", class_="params")
-    check_if_none(params, "There is no ul tags with params class")
+    check_if_empty(params, "There is no ul tags with params class")
     li_tags = safe_method_call(params, Tag, Tag.find_all, "li")
-    check_if_none(li_tags, "There is no li tags in ul tag with params class")
+    check_if_empty(li_tags, "There is no li tags in ul tag with params class")
     logger.debug(f"Is li_tags? - {bool(li_tags)}")
-    for tag in li_tags:  # type: ignore [union-attr] # Checked by check_if_none
+    for tag in li_tags:  # type: ignore [union-attr] #Checked by check_if_empty
         text = tag.get_text()
         if armor_class is None:
             armor_class = read_characteristic(
@@ -257,7 +258,7 @@ def scrape_cards(
     for card in cards:
         try:
             title_tag = card.find("h2", class_="card-title")
-            check_if_none(title_tag, "title_tag is empty")
+            check_if_empty(title_tag, "title_tag is empty")
             title = get_title(title_tag)
             link = get_link(title_tag)
             armor_class, danger_rate = get_armor_class_and_danger(card)
@@ -338,9 +339,9 @@ async def scrape_bestiary(
             current_url = url + f"&page={page_num}"
             try:
                 soup = await get_soup(session=session, current_url=current_url)
-                check_if_none(soup, f"No data found on link {current_url}")
+                check_if_empty(soup, f"No data found on link {current_url}")
                 cards = soup.find_all("div", class_="card") if soup else None
-                check_if_none(cards, f"No data found on link {current_url}")
+                check_if_empty(cards, f"No data found on link {current_url}")
             except EmptyDataError as error:
                 logger.error(f"Scraper error - {error}")
             monsters_list.extend(

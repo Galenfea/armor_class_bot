@@ -5,9 +5,9 @@ from typing import Dict, Optional
 
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
-from constantns import BUTTON_FACTOR, BUTTON_TEXT, CALLBACK_DATA
-from log_config import log_config
-from selector import SELECTOR
+from settings.constantns import BUTTON_FACTOR, BUTTON_TEXT, CALLBACK_DATA
+from settings.log_config import log_config
+from settings.selector import SELECTOR
 
 dictConfig(log_config)
 logger = logging.getLogger("armor_class_bot")

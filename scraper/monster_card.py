@@ -3,7 +3,7 @@ import re
 from logging.config import dictConfig
 from typing import Optional
 
-from log_config import log_config
+from settings.log_config import log_config
 
 dictConfig(log_config)
 logger = logging.getLogger(__name__)
@@ -121,7 +121,7 @@ class MonsterCard:
     def __repr__(self):
         return (
             f'<MonsterCard(title="{self.title}", '
-            "armor_class={self.armor_class})>"
+            f"armor_class={self.armor_class})>"
         )
 
     def __str__(self):
@@ -145,7 +145,7 @@ class MonsterCard:
         )
 
         title_to_display = self.title
-        # If english language don't show russian name
+        # If not russian language don't show russian name
         if self.language != "ru":
             match = re.search(r"\[(.*)\]", title_to_display)
             title_to_display = match.group(1) if match else title_to_display
